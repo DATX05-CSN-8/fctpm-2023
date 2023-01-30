@@ -1,0 +1,33 @@
+{
+    "boot-source": {
+      "kernel_image_path": "../../vm-image/out/fc-image-kernel",
+      "boot_args": "console=ttyS0 panic=1 pci=off reboot=k tsc=reliable ipv6.disable=1 init=/init",
+      "initrd_path": null
+    },
+    "drives": [
+      {
+        "drive_id": "rootfs",
+        "path_on_host": "../../vm-image/out/fc-disk.img",
+        "is_root_device": true,
+        "partuuid": null,
+        "is_read_only": false,
+        "cache_type": "Unsafe",
+        "io_engine": "Sync",
+        "rate_limiter": null
+      }
+    ],
+    "machine-config": {
+      "vcpu_count": 2,
+      "mem_size_mib": 1024,
+      "smt": false,
+      "track_dirty_pages": false
+    },
+    "balloon": null,
+    "network-interfaces": [
+      
+    ],
+    "vsock": null,
+    "logger": null,
+    "metrics": null,
+    "mmds-config": null
+  }
