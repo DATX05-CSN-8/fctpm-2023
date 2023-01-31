@@ -1,0 +1,48 @@
+From fb66730b11ae10e9b49b1cf6423d83f941c8e0b2 Mon Sep 17 00:00:00 2001
+From: vltmn <melkerveltman@gmail.com>
+Date: Tue, 31 Jan 2023 10:37:04 +0100
+Subject: [PATCH] Add exit command to boot timer device
+
+---
+ src/devices/src/pseudo/boot_timer.rs | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/devices/src/pseudo/boot_timer.rs b/src/devices/src/pseudo/boot_timer.rs
+index 2fddd7d7..23f02819 100644
+--- a/src/devices/src/pseudo/boot_timer.rs
++++ b/src/devices/src/pseudo/boot_timer.rs
+@@ -1,12 +1,13 @@
+ // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ // SPDX-License-Identifier: Apache-2.0
+ 
+-use logger::info;
++use logger::warn;
+ use utils::time::TimestampUs;
+ 
+ use crate::bus::BusDevice;
+ 
+ const MAGIC_VALUE_SIGNAL_GUEST_BOOT_COMPLETE: u8 = 123;
++const MAGIC_VALUE_SIGNAL_GUEST_EXIT: u8 = 122;
+ 
+ /// Pseudo device to record the kernel boot time.
+ pub struct BootTimer {
+@@ -25,13 +26,15 @@ impl BusDevice for BootTimer {
+ 
+             let boot_time_us = now_tm_us.time_us - self.start_ts.time_us;
+             let boot_time_cpu_us = now_tm_us.cputime_us - self.start_ts.cputime_us;
+-            info!(
++            warn!(
+                 "Guest-boot-time = {:>6} us {} ms, {:>6} CPU us {} CPU ms",
+                 boot_time_us,
+                 boot_time_us / 1000,
+                 boot_time_cpu_us,
+                 boot_time_cpu_us / 1000
+             );
++        } if data[0] == MAGIC_VALUE_SIGNAL_GUEST_EXIT {
++            unsafe { libc::exit(0); }
+         }
+     }
+ }
+-- 
+2.30.2
+
