@@ -19,7 +19,7 @@ reset: firecracker
 
 
 clean:
-	rm -rf bin $(REL_DIR)
+	rm -rf bin $(REL_DIR)/firecracker
 
 clean-git:
 	rm -rf firecracker

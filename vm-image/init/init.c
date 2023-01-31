@@ -1,6 +1,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/reboot.h> 
 
 /*
  * This little program is a mock 'init' process. It writes the firecracker debug port.
@@ -9,11 +12,9 @@
 
 #define MAGIC_MMIO_SIGNAL_GUEST_BOOT_COMPLETE 0xd0000000
 #define MAGIC_VALUE_SIGNAL_GUEST_BOOT_COMPLETE 123
-#define MAGIC_VALUE_SIGNAL_GUEST_EXIT 122
 
 int main(void)
 {
-
     // set up boot timer device mmio
     int fd = open("/dev/mem", (O_RDWR | O_SYNC | O_CLOEXEC));
     int mapped_size = getpagesize();
@@ -29,9 +30,7 @@ int main(void)
     *map_base = MAGIC_VALUE_SIGNAL_GUEST_BOOT_COMPLETE;
     msync(map_base, mapped_size, MS_ASYNC);
 
-    // write guest exit command
-    *map_base = MAGIC_VALUE_SIGNAL_GUEST_EXIT;
-    msync(map_base, mapped_size, MS_ASYNC);
-
+    // trigger reboot
+    reboot(RB_AUTOBOOT);
     return 0;
 }
