@@ -1,37 +1,37 @@
-#include <sys/io.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 
 /*
  * This little program is a mock 'init' process. It writes the firecracker debug port.
  * It will write a timestamp to the log.
  */
 
-#define PORT_FC     0x03f0
-#define PORT_FC_VAL 123
-#define INP_LEN 16
+#define MAGIC_MMIO_SIGNAL_GUEST_BOOT_COMPLETE 0xd0000000
+#define MAGIC_VALUE_SIGNAL_GUEST_BOOT_COMPLETE 123
+#define MAGIC_VALUE_SIGNAL_GUEST_EXIT 122
 
 int main(void)
 {
-    int r;
-    char inp[INP_LEN];
 
-    while(1) {
-        if (fgets(inp, INP_LEN, stdin) == NULL) {
-            fprintf(stderr, "Error getting input data\n.");
-            exit(0);
-        }
-        inp[strcspn(inp, "\n")] = 0;
-        if (!strcmp(inp, "exit"))
-            break;
-    }
-    r = ioperm(PORT_FC, 1, 1);
-    if (r) {
-        fprintf(stderr, "Error setting up port access to 0x%x, quitting\n", PORT_FC);
-        return -1;
-    }
+    // set up boot timer device mmio
+    int fd = open("/dev/mem", (O_RDWR | O_SYNC | O_CLOEXEC));
+    int mapped_size = getpagesize();
 
-    outb(PORT_FC_VAL, PORT_FC);
+    char *map_base = mmap(NULL,
+            mapped_size,
+            PROT_WRITE,
+            MAP_SHARED,
+            fd,
+            MAGIC_MMIO_SIGNAL_GUEST_BOOT_COMPLETE);
+
+    // write guest boot complete command
+    *map_base = MAGIC_VALUE_SIGNAL_GUEST_BOOT_COMPLETE;
+    msync(map_base, mapped_size, MS_ASYNC);
+
+    // write guest exit command
+    *map_base = MAGIC_VALUE_SIGNAL_GUEST_EXIT;
+    msync(map_base, mapped_size, MS_ASYNC);
+
     return 0;
 }
