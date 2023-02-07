@@ -30,6 +30,7 @@ int main(void)
     *map_base = MAGIC_VALUE_SIGNAL_GUEST_BOOT_COMPLETE;
     msync(map_base, mapped_size, MS_ASYNC);
 
+    sleep(20);
     // trigger reboot
     reboot(RB_AUTOBOOT);
     return 0;
