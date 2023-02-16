@@ -2,11 +2,23 @@ package main
 
 import (
 	"flag"
-	"fmt"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	var apiSock = flag.String("api-sock", "/tmp/fctpm-orchestrator", "File path to the socket that should be listened to")
+	apiSock := flag.String("api-sock", "/tmp/fctpm-orchestrator", "File path to the socket that should be listened to")
 	flag.Parse()
-	fmt.Println("api socket has value ", *apiSock)
+
+	r := gin.Default()
+	r.GET("/hello", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "world",
+		})
+	})
+
+	err := r.RunUnix(*apiSock)
+	if err != nil {
+		panic(err)
+	}
 }
