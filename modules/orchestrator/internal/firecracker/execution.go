@@ -12,12 +12,14 @@ type FirecrackerExecution interface {
 }
 
 type firecrackerExecution struct {
-	sb      *strings.Builder
-	statusp *vminfo.Status
+	sb          *strings.Builder
+	statusp     *vminfo.Status
+	subscribers *[]func(vminfo.Status)
 }
 
 func newFirecrackerExecution(sb *strings.Builder, outpc chan error) *firecrackerExecution {
 	var status vminfo.Status = vminfo.Running
+	subscribers := make([]func(vminfo.Status), 0)
 	go func() {
 		err := <-outpc
 		if err != nil {
@@ -25,10 +27,14 @@ func newFirecrackerExecution(sb *strings.Builder, outpc chan error) *firecracker
 		} else {
 			status = vminfo.Stopped
 		}
+		for _, s := range subscribers {
+			s(status)
+		}
 	}()
 	return &firecrackerExecution{
-		sb:      sb,
-		statusp: &status,
+		sb:          sb,
+		statusp:     &status,
+		subscribers: &subscribers,
 	}
 }
 
@@ -38,4 +44,8 @@ func (f *firecrackerExecution) Status() vminfo.Status {
 
 func (f *firecrackerExecution) Logs() string {
 	return f.sb.String()
+}
+
+func (f *firecrackerExecution) Subscribe(cb func(vminfo.Status)) {
+	*f.subscribers = append(*f.subscribers, cb)
 }

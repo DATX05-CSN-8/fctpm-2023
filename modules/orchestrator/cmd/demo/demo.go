@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
 )
 
 func main() {
@@ -24,8 +24,10 @@ func main() {
 
 	fmt.Printf("Current status %d\n", fce.Status())
 	fmt.Printf("Current logs:\n%s", fce.Logs())
-	time.Sleep(5 * time.Second)
-
-	fmt.Printf("Current status %d\n", fce.Status())
-	fmt.Printf("Current logs:\n%s", fce.Logs())
+	c := make(chan int)
+	fce.Subscribe(func(status vminfo.Status) {
+		fmt.Printf("Status: %d\n", status)
+		c <- 1
+	})
+	<-c
 }
