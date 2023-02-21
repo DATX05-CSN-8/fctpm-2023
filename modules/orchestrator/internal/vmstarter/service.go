@@ -9,10 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type VMStarterService interface {
-	StartVM(config string) (string, error)
-}
-
 type infoRepo interface {
 	Create(data vminfo.VMInfo) (vminfo.VMInfo, error)
 	Update(data vminfo.VMInfo) (vminfo.VMInfo, error)

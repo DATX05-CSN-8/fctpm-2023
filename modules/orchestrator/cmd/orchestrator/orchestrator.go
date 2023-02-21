@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmdata"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmexecution"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmstarter"
@@ -52,10 +53,11 @@ func main() {
 	vminfoRepo := vminfo.NewRepository(db)
 	vmExecRepo := vmexecution.NewRepository()
 	vmstarterService := vmstarter.NewVMStarterService(*fcClient, vminfoRepo, vmExecRepo)
+	dataRetrieverService := vmdata.NewVMDataRetriever(vminfoRepo, vmExecRepo)
 
 	r := gin.Default()
 	v1 := r.Group("/v1")
-	handlers.AttachWebHandlers(v1, vmstarterService)
+	handlers.AttachWebHandlers(v1, vmstarterService, dataRetrieverService)
 
 	err = r.RunUnix(*apiSock)
 	if err != nil {

@@ -31,7 +31,7 @@ func (r *repository) Create(vmInfo VMInfo) (VMInfo, error) {
 
 func (r *repository) FindById(id string) (VMInfo, error) {
 	var vmInfo VMInfo
-	err := r.db.Find(&vmInfo, id).Error
+	err := r.db.Where("id = ?", id).First(&vmInfo).Error
 	return vmInfo, err
 }
 

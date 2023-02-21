@@ -1,5 +1,7 @@
 package vmexecution
 
+import "fmt"
+
 type Repository interface {
 	FindAll() ([]VMExecution, error)
 	FindById(id string) (VMExecution, error)
@@ -33,6 +35,10 @@ func (r *repository) Create(e VMExecution) (VMExecution, error) {
 }
 
 func (r *repository) FindById(id string) (VMExecution, error) {
+	d, prs := r.data[id]
+	if !prs {
+		return d, fmt.Errorf("NOT_FOUND")
+	}
 	return r.data[id], nil
 }
 

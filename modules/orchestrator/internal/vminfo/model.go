@@ -14,7 +14,7 @@ const (
 )
 
 type VMInfo struct {
-	Id        string
+	Id        string `gorm:"primary_key"`
 	StartTime time.Time
 	ExecTime  time.Duration
 	Status    Status
