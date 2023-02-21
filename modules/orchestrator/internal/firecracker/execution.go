@@ -6,21 +6,17 @@ import (
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
 )
 
-type FirecrackerExecution interface {
-	Status() vminfo.Status
-	Logs() string
-	Subscribe(func(vminfo.Status))
-}
+type StatusCallback func(vminfo.Status)
 
-type firecrackerExecution struct {
+type FirecrackerExecution struct {
 	sb          *strings.Builder
 	statusp     *vminfo.Status
-	subscribers *[]func(vminfo.Status)
+	subscribers *[]StatusCallback
 }
 
-func newFirecrackerExecution(sb *strings.Builder, outpc chan error) *firecrackerExecution {
+func newFirecrackerExecution(sb *strings.Builder, outpc chan error) *FirecrackerExecution {
 	var status vminfo.Status = vminfo.Running
-	subscribers := make([]func(vminfo.Status), 0)
+	subscribers := make([]StatusCallback, 0)
 	go func() {
 		err := <-outpc
 		if err != nil {
@@ -32,21 +28,21 @@ func newFirecrackerExecution(sb *strings.Builder, outpc chan error) *firecracker
 			s(status)
 		}
 	}()
-	return &firecrackerExecution{
+	return &FirecrackerExecution{
 		sb:          sb,
 		statusp:     &status,
 		subscribers: &subscribers,
 	}
 }
 
-func (f *firecrackerExecution) Status() vminfo.Status {
+func (f *FirecrackerExecution) Status() vminfo.Status {
 	return *f.statusp
 }
 
-func (f *firecrackerExecution) Logs() string {
+func (f *FirecrackerExecution) Logs() string {
 	return f.sb.String()
 }
 
-func (f *firecrackerExecution) Subscribe(cb func(vminfo.Status)) {
+func (f *FirecrackerExecution) Subscribe(cb func(vminfo.Status)) {
 	*f.subscribers = append(*f.subscribers, cb)
 }

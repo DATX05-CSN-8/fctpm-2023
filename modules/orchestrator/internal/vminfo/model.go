@@ -3,8 +3,6 @@ package vminfo
 import (
 	"fmt"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type Status int64
@@ -18,19 +16,20 @@ const (
 type VMInfo struct {
 	Id        string
 	StartTime time.Time
-	EndTime   time.Time
+	ExecTime  time.Duration
 	Status    Status
 }
 
-func NewVMInfo(startTime time.Time) VMInfo {
+func NewVMInfo(id string, startTime time.Time) VMInfo {
+	zeroDuration, _ := time.ParseDuration("0ms")
 	return VMInfo{
-		Id:        uuid.NewString(),
+		Id:        id,
 		StartTime: startTime,
-		EndTime:   time.UnixMilli(0),
+		ExecTime:  zeroDuration,
 		Status:    Running,
 	}
 }
 
 func (m *VMInfo) String() string {
-	return fmt.Sprintf("Id: %s, Status: %d, Start: %s, End: %s", m.Id, m.Status, m.StartTime.String(), m.EndTime.String())
+	return fmt.Sprintf("Id: %s, Status: %d, Start: %s, Exec: %s", m.Id, m.Status, m.StartTime.String(), m.ExecTime.String())
 }

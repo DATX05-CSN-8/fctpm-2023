@@ -4,15 +4,37 @@ import (
 	"flag"
 	"os"
 
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmexecution"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmstarter"
+	handlers "github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/web"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
+func genDefaultFCBinPath() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	return wd + "/../firecracker/bin/firecracker"
+}
+
+func genDefaultFCConfigPath() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	return wd + "/../vm-start/fc-config.json"
+}
 func main() {
 	apiSock := flag.String("api-sock", "/tmp/fctpm-orchestrator", "File path to the socket that should be listened to")
 	dbPath := flag.String("db-path", "test.db", "File path to the db file to be used for sqlite")
+	fcPath := flag.String("firecracker-bin", genDefaultFCBinPath(), "File path to the firecracker binary that should be used")
 	flag.Parse()
 
 	err := removeFileIfExists(*apiSock)
@@ -27,14 +49,14 @@ func main() {
 	db.AutoMigrate(&vminfo.VMInfo{})
 
 	// TODO use this repository in the service
-	_ = vminfo.NewRepository(db)
+	fcClient := firecracker.NewFirecrackerClient(*fcPath)
+	vminfoRepo := vminfo.NewRepository(db)
+	vmExecRepo := vmexecution.NewRepository()
+	vmstarterService := vmstarter.NewVMStarterService(*fcClient, vminfoRepo, vmExecRepo)
 
 	r := gin.Default()
-	r.GET("/hello", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "world",
-		})
-	})
+	v1 := r.Group("/v1")
+	handlers.AttachWebHandlers(v1, vmstarterService)
 
 	err = r.RunUnix(*apiSock)
 	if err != nil {

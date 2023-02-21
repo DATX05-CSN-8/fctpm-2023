@@ -8,21 +8,17 @@ import (
 	"strings"
 )
 
-type FirecrackerClient interface {
-	Start(config string) (FirecrackerExecution, error)
-}
-
-type firecrackerClient struct {
+type FirecrackerClient struct {
 	binaryPath string
 }
 
-func NewFirecrackerClient(binaryPath string) *firecrackerClient {
-	return &firecrackerClient{
+func NewFirecrackerClient(binaryPath string) *FirecrackerClient {
+	return &FirecrackerClient{
 		binaryPath: binaryPath,
 	}
 }
 
-func (c *firecrackerClient) Start(configPath string) (*firecrackerExecution, error) {
+func (c *FirecrackerClient) Start(configPath string) (*FirecrackerExecution, error) {
 	_, err := os.Stat(configPath)
 	if os.IsNotExist(err) {
 		return nil, err
