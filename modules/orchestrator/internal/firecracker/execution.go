@@ -9,6 +9,7 @@ import (
 type FirecrackerExecution interface {
 	Status() vminfo.Status
 	Logs() string
+	Subscribe(func(vminfo.Status))
 }
 
 type firecrackerExecution struct {
