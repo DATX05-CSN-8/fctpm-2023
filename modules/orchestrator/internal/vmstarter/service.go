@@ -1,7 +1,6 @@
 package vmstarter
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
@@ -69,18 +68,11 @@ func (s *vmStarterService) StartVM(config string) (string, error) {
 			panic(err)
 		}
 		// persist in inforepo
-		vi.ExecTime = bootTime
+		vi.ExecTime = bootTime.BootTime
 		vi.Status = status
 		s.infoRepo.Update(vi)
 		// delete from execution repo
 		s.executionRepo.Delete(vmexec)
 	})
 	return id, nil
-}
-
-func parseLogsForBootTime(logs string) (time.Duration, error) {
-	// TODO
-	fmt.Println(logs)
-	t, _ := time.ParseDuration("10ms")
-	return t, nil
 }

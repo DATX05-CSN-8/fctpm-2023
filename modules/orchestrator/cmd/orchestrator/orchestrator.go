@@ -48,7 +48,6 @@ func main() {
 	}
 	db.AutoMigrate(&vminfo.VMInfo{})
 
-	// TODO use this repository in the service
 	fcClient := firecracker.NewFirecrackerClient(*fcPath)
 	vminfoRepo := vminfo.NewRepository(db)
 	vmExecRepo := vmexecution.NewRepository()
