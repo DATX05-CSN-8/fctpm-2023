@@ -17,6 +17,8 @@ type vmStarterService interface {
 type vmDataRetrieverService interface {
 	GetLogs(id string) (string, error)
 	GetInfo(id string) (vminfo.VMInfo, error)
+	GetAllInfo() ([]vminfo.VMInfo, error)
+	Delete(id string) error
 }
 
 func AttachWebHandlers(rh gin.IRoutes, starterService vmStarterService, dataService vmDataRetrieverService) {
@@ -27,4 +29,6 @@ func AttachWebHandlers(rh gin.IRoutes, starterService vmStarterService, dataServ
 	rh.POST("/vm", whs.startVMEndpoint)
 	rh.GET("/vm/:id/logs", whs.getVMLogs)
 	rh.GET("/vm/:id", whs.getVMInfo)
+	rh.GET("/vm", whs.getVMInfos)
+	rh.DELETE("/vm/:id", whs.deleteVMInfo)
 }

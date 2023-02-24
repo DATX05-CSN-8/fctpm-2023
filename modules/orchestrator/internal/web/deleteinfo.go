@@ -7,19 +7,18 @@ import (
 	"gorm.io/gorm"
 )
 
-type GetVMInfoRequest struct {
+type DeleteVMInfoRequest struct {
 	Id string `uri:"id" binding:"required,uuid"`
 }
 
-func (s *webhandlers) getVMInfo(c *gin.Context) {
-	var r GetVMInfoRequest
+func (s *webhandlers) deleteVMInfo(c *gin.Context) {
+	var r DeleteVMInfoRequest
 	if err := c.ShouldBindUri(&r); err != nil {
 		c.Status(400)
 		fmt.Println(err)
 		return
 	}
-
-	info, err := s.dataService.GetInfo(r.Id)
+	err := s.dataService.Delete(r.Id)
 	if err == gorm.ErrRecordNotFound {
 		c.Status(404)
 		return
@@ -29,15 +28,6 @@ func (s *webhandlers) getVMInfo(c *gin.Context) {
 		fmt.Println(err)
 		return
 	}
-	c.JSON(200, info)
-}
 
-func (s *webhandlers) getVMInfos(c *gin.Context) {
-	infos, err := s.dataService.GetAllInfo()
-	if err != nil {
-		c.Status(500)
-		fmt.Println(err)
-		return
-	}
-	c.JSON(200, infos)
+	c.Status(200)
 }
