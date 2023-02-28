@@ -1,0 +1,153 @@
+2023-02-21T10:23:54.766715346 [anonymous-instance:main:WARN:src/devices/src/legacy/serial.rs:257] Failed to register serial input fd: event_manager: failed to manage epoll file descriptor: Operation not permitted (os error 1)
+[    0.000000] Linux version 6.1.8 (root@buildkitsandbox) (gcc (Alpine 12.2.1_git20220924-r4) 12.2.1 20220924, GNU ld (GNU Binutils) 2.39) #1 SMP PREEMPT_DYNAMIC Mon Jan 30 12:09:15 UTC 2023
+[    0.000000] Command line: console=ttyS0 panic=1 pci=off reboot=k tsc=reliable ipv6.disable=1 init=/init root=/dev/vda rw virtio_mmio.device=4K@0xd0001000:5
+[    0.000000] x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+[    0.000000] x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+[    0.000000] x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+[    0.000000] x86/fpu: Supporting XSAVE feature 0x020: 'AVX-512 opmask'
+[    0.000000] x86/fpu: Supporting XSAVE feature 0x040: 'AVX-512 Hi256'
+[    0.000000] x86/fpu: Supporting XSAVE feature 0x080: 'AVX-512 ZMM_Hi256'
+[    0.000000] x86/fpu: Supporting XSAVE feature 0x200: 'Protection Keys User registers'
+[    0.000000] x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+[    0.000000] x86/fpu: xstate_offset[5]:  832, xstate_sizes[5]:   64
+[    0.000000] x86/fpu: xstate_offset[6]:  896, xstate_sizes[6]:  512
+[    0.000000] x86/fpu: xstate_offset[7]: 1408, xstate_sizes[7]: 1024
+[    0.000000] x86/fpu: xstate_offset[9]: 2432, xstate_sizes[9]:    8
+[    0.000000] x86/fpu: Enabled xstate features 0x2e7, context size is 2440 bytes, using 'compacted' format.
+[    0.000000] signal: max sigframe size: 3232
+[    0.000000] BIOS-provided physical RAM map:
+[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+[    0.000000] BIOS-e820: [mem 0x0000000000100000-0x0000000007ffffff] usable
+[    0.000000] NX (Execute Disable) protection: active
+[    0.000000] DMI not present or invalid.
+[    0.000000] tsc: Fast TSC calibration using PIT
+[    0.000000] tsc: Detected 2995.227 MHz processor
+[    0.000064] last_pfn = 0x8000 max_arch_pfn = 0x400000000
+[    0.000094] Disabled
+[    0.000098] x86/PAT: MTRRs disabled, skipping PAT initialization too.
+[    0.000108] CPU MTRRs all blank - virtualized system.
+[    0.000111] x86/PAT: Configuration [0-7]: WB  WT  UC- UC  WB  WT  UC- UC  
+[    0.000136] found SMP MP-table at [mem 0x0009fc00-0x0009fc0f]
+[    0.000148] Using GB pages for direct mapping
+[    0.000213] No NUMA configuration found
+[    0.000213] Faking a node at [mem 0x0000000000000000-0x0000000007ffffff]
+[    0.000216] NODE_DATA(0) allocated [mem 0x07ffc000-0x07ffffff]
+[    0.000252] Zone ranges:
+[    0.000255]   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+[    0.000258]   DMA32    [mem 0x0000000001000000-0x0000000007ffffff]
+[    0.000259]   Normal   empty
+[    0.000259] Movable zone start for each node
+[    0.000259] Early memory node ranges
+[    0.000259]   node   0: [mem 0x0000000000001000-0x000000000009efff]
+[    0.000261]   node   0: [mem 0x0000000000100000-0x0000000007ffffff]
+[    0.000263] Initmem setup node 0 [mem 0x0000000000001000-0x0000000007ffffff]
+[    0.000546] On node 0, zone DMA: 1 pages in unavailable ranges
+[    0.000620] On node 0, zone DMA: 97 pages in unavailable ranges
+[    0.001430] Intel MultiProcessor Specification v1.4
+[    0.001433] MPTABLE: OEM ID: FC      
+[    0.001433] MPTABLE: Product ID: 000000000000
+[    0.001433] MPTABLE: APIC at: 0xFEE00000
+[    0.001440] Processor #0 (Bootup-CPU)
+[    0.001467] IOAPIC[0]: apic_id 2, version 17, address 0xfec00000, GSI 0-23
+[    0.001470] Processors: 1
+[    0.001470] TSC deadline timer available
+[    0.001473] smpboot: Allowing 1 CPUs, 0 hotplug CPUs
+[    0.001484] [mem 0x08000000-0xffffffff] available for PCI devices
+[    0.001490] clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1910969940391419 ns
+[    0.003065] setup_percpu: NR_CPUS:64 nr_cpumask_bits:1 nr_cpu_ids:1 nr_node_ids:1
+[    0.003968] percpu: Embedded 43 pages/cpu s135384 r8192 d32552 u2097152
+[    0.003988] Fallback order for Node 0: 0 
+[    0.003989] Built 1 zonelists, mobility grouping on.  Total pages: 32000
+[    0.003990] Policy zone: DMA32
+[    0.003991] Kernel command line: console=ttyS0 panic=1 pci=off reboot=k tsc=reliable ipv6.disable=1 init=/init root=/dev/vda rw virtio_mmio.device=4K@0xd0001000:5
+[    0.004033] Unknown kernel command line parameters "pci=off", will be passed to user space.
+[    0.004083] random: crng init done
+[    0.004142] Dentry cache hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.004174] Inode-cache hash table entries: 8192 (order: 4, 65536 bytes, linear)
+[    0.004201] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.004707] Memory: 108852K/130680K available (8193K kernel code, 1233K rwdata, 1192K rodata, 952K init, 2212K bss, 21572K reserved, 0K cma-reserved)
+[    0.004732] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.004989] Dynamic Preempt: voluntary
+[    0.005221] rcu: Preemptible hierarchical RCU implementation.
+[    0.005222] rcu:     RCU restricting CPUs from NR_CPUS=64 to nr_cpu_ids=1.
+[    0.005223]  Trampoline variant of Tasks RCU enabled.
+[    0.005224] rcu: RCU calculated value of scheduler-enlistment delay is 100 jiffies.
+[    0.005224] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=1
+[    0.005234] NR_IRQS: 4352, nr_irqs: 48, preallocated irqs: 16
+[    0.005399] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.005489] Console: colour dummy device 80x25
+[    0.030870] printk: console [ttyS0] enabled
+[    0.031106] APIC: Switch to symmetric I/O mode setup
+[    0.031941] clocksource: tsc-early: mask: 0xffffffffffffffff max_cycles: 0x2b2ca8b90b0, max_idle_ns: 440795340732 ns
+[    0.032513] Calibrating delay loop (skipped), value calculated using timer frequency.. 5990.45 BogoMIPS (lpj=2995227)
+[    0.033086] pid_max: default: 32768 minimum: 301
+[    0.033347] LSM: Security Framework initializing
+[    0.033511] Mount-cache hash table entries: 512 (order: 0, 4096 bytes, linear)
+[    0.033511] Mountpoint-cache hash table entries: 512 (order: 0, 4096 bytes, linear)
+[    0.033511] x86/cpu: User Mode Instruction Prevention (UMIP) activated
+[    0.033511] Last level iTLB entries: 4KB 0, 2MB 0, 4MB 0
+[    0.033511] Last level dTLB entries: 4KB 0, 2MB 0, 4MB 0, 1GB 0
+[    0.033511] Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+[    0.033511] Spectre V2 : Mitigation: Enhanced IBRS
+[    0.033511] Spectre V2 : Spectre v2 / SpectreRSB mitigation: Filling RSB on context switch
+[    0.033511] Spectre V2 : Spectre v2 / PBRSB-eIBRS: Retire a single CALL on VMEXIT
+[    0.033511] Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+[    0.033511] Speculative Store Bypass: Mitigation: Speculative Store Bypass disabled via prctl
+[    0.033511] Freeing SMP alternatives memory: 20K
+[    0.033511] smpboot: CPU0: Intel(R) Xeon(R) Processor @ 3.00GHz (family: 0x6, model: 0x8c, stepping: 0x1)
+[    0.033511] cblist_init_generic: Setting adjustable number of callback queues.
+[    0.033514] cblist_init_generic: Setting shift to 0 and lim to 1.
+[    0.033879] Performance Events: unsupported p6 CPU model 140 no PMU driver, software events only.
+[    0.034427] rcu: Hierarchical SRCU implementation.
+[    0.034513] rcu:     Max phase no-delay instances is 400.
+[    0.034951] smp: Bringing up secondary CPUs ...
+[    0.035217] smp: Brought up 1 node, 1 CPU
+[    0.035460] smpboot: Max logical packages: 1
+[    0.035513] smpboot: Total of 1 processors activated (5990.45 BogoMIPS)
+[    0.035962] devtmpfs: initialized
+[    0.036252] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1911260446275000 ns
+[    0.036514] futex hash table entries: 256 (order: 2, 16384 bytes, linear)
+[    0.037322] kprobes: kprobe jump-optimization is enabled. All kprobes are optimized if possible.
+[    0.037569] HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+[    0.037964] HugeTLB: 28 KiB vmemmap can be freed for a 2.00 MiB page
+[    0.038406] iommu: Default domain type: Translated 
+[    0.038513] iommu: DMA domain TLB invalidation policy: lazy mode 
+[    0.038893] SCSI subsystem initialized
+[    0.039158] clocksource: Switched to clocksource tsc-early
+[    0.039511] VFS: Disk quotas dquot_6.6.0
+[    0.039511] VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+[    0.039918] virtio-mmio: Registering device virtio-mmio.0 at 0xd0001000-0xd0001fff, IRQ 5.
+[    0.040433] platform rtc_cmos: registered platform RTC device (no PNP device found)
+[    0.040962] workingset: timestamp_bits=56 max_order=15 bucket_order=0
+[    0.041920] io scheduler mq-deadline registered
+[    0.042186] io scheduler kyber registered
+[    0.042471] Serial: 8250/16550 driver, 1 ports, IRQ sharing disabled
+[    0.042895] serial8250: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
+[    0.043434] Non-volatile memory driver v1.3
+[    0.043757] virtio_blk virtio0: 1/0/0 default/read/poll queues
+[    0.044227] virtio_blk virtio0: [vda] 2048000 512-byte logical blocks (1.05 GB/1000 MiB)
+2023-02-21T10:23:54.860588390 [anonymous-instance:fc_vcpu 0:WARN:src/devices/src/legacy/i8042.rs:121] Failed to trigger i8042 kbd interrupt (disabled by guest OS)
+[    0.051499] i8042: Failed to disable AUX port, but continuing anyway... Is this a SiS?
+[    0.051957] i8042: If AUX port is really absent please use the 'i8042.noaux' option
+2023-02-21T10:23:54.867383355 [anonymous-instance:fc_vcpu 0:WARN:src/devices/src/legacy/i8042.rs:121] Failed to trigger i8042 kbd interrupt (disabled by guest OS)
+[    0.305089] serio: i8042 KBD port at 0x60,0x64 irq 1
+[    0.306478] rtc_cmos rtc_cmos: only 24-hr supported
+[    0.307537] intel_pstate: CPU model not supported
+[    0.308764] IPI shorthand broadcast: enabled
+[    0.309028] sched_clock: Marking stable (281495088, 27065591)->(322714093, -14153414)
+[    0.309536] ima: No TPM chip found, activating TPM-bypass!
+[    0.309891] ima: Allocated hash algorithm: sha1
+[    0.310164] ima: No architecture policies found
+[    0.809216] input: AT Raw Set 2 keyboard as /devices/platform/i8042/serio0/input/input0
+[    0.812647] EXT4-fs (vda): recovery complete
+[    0.813198] EXT4-fs (vda): mounted filesystem with ordered data mode. Quota mode: none.
+[    0.814262] VFS: Mounted root (ext4 filesystem) on device 254:0.
+[    0.815552] devtmpfs: mounted
+[    0.815856] Freeing unused kernel image (initmem) memory: 952K
+[    0.816087] Write protecting the kernel read-only data: 12288k
+[    0.817239] Freeing unused kernel image (text/rodata gap) memory: 2044K
+[    0.817849] Freeing unused kernel image (rodata/data gap) memory: 856K
+[    0.818083] Run /init as init process
+2023-02-21T10:23:55.633752032 [anonymous-instance:fc_vcpu 0:WARN:src/devices/src/pseudo/boot_timer.rs:28] Guest-boot-time = 886437 us 886 ms, 133461 CPU us 133 CPU ms
+[    0.818946] reboot: Restarting system
+[    0.819100] reboot: machine restart
