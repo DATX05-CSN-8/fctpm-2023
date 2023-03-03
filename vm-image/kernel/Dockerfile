@@ -34,7 +34,8 @@ RUN curl -fsSLO ${KERNEL_SOURCE} && \
     bsdtar xf linux-${KERNEL_VERSION}.tar.xz && \
     mv linux-${KERNEL_VERSION} /linux
 
-COPY /my.config /linux/.config
+ENV CONFIG_NAME=my
+COPY /${CONFIG_NAME}.config /linux/.config
 
 WORKDIR /linux
 
