@@ -1,10 +1,11 @@
-DIRS = init kernel
+DIRS = init kernel simple_init
 ORG ?= $(USER)
 LOOP ?= /dev/loop0
 IMG_NAME = fc-image
 
 clean: 
-	rm -rf out
+	rm -rf out \
+	rm -rf */PKG_TAG
 
 build: out/fc-disk.img
 

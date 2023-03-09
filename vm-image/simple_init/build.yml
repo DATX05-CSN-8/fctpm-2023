@@ -1,0 +1,4 @@
+image: simple-init
+arches:
+  - amd64
+network: yes
