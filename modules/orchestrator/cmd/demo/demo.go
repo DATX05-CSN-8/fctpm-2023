@@ -1,33 +1,35 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 
-	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
-	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
 )
 
 func main() {
-	wd, err := os.Getwd()
-	if err != nil {
-		panic(err)
+	swtpmBin := os.Getenv("SWTPM_BIN")
+	if len(swtpmBin) == 0 {
+		fmt.Println("SWTPM_BIN environment variable needs to be specified")
+		return
+	}
+	tpmPath := os.Getenv("TPM_PATH")
+	if len(tpmPath) == 0 {
+		fmt.Println("TPM_PATH environmnent variable needs to be specified")
+		return
 	}
 
-	fcPath := wd + "/../firecracker/bin/firecracker"
-	configPath := wd + "/../vm-start/fc-config.json"
-	fc := firecracker.NewFirecrackerClient(fcPath)
-	fce, err := fc.Start(configPath)
+	service := tpminstantiator.NewTpmInstantiatorService(swtpmBin, tpmPath)
+	instance, err := service.Create()
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		return
 	}
+	r := bufio.NewReader(os.Stdin)
+	fmt.Print("Press enter to stop swtpm...")
+	_, _ = r.ReadString('\n')
 
-	fmt.Printf("Current status %d\n", fce.Status())
-	fmt.Printf("Current logs:\n%s", fce.Logs())
-	c := make(chan int)
-	fce.Subscribe(func(status vminfo.Status) {
-		fmt.Printf("Status: %d\n", status)
-		c <- 1
-	})
-	<-c
+	service.Destroy(instance)
+
 }
