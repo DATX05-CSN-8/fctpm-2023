@@ -35,7 +35,6 @@ func joinPath(paths []string) string {
 }
 func ensureDirectory(paths ...string) (string, error) {
 	path := joinPath(paths)
-	println("Path", path)
 	err := os.MkdirAll(path, os.ModePerm)
 	return path, err
 }

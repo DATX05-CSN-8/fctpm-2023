@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
 )
 
@@ -19,17 +20,38 @@ func main() {
 		fmt.Println("TPM_PATH environmnent variable needs to be specified")
 		return
 	}
+	fcTmplPath := os.Getenv("FIRECRACKER_TEMPLATE_PATH")
+	if len(fcTmplPath) == 0 {
+		fmt.Println("FIRECRACKER_TEMPLATE_PATH variable needs to be specified")
+		return
+	}
 
 	service := tpminstantiator.NewTpmInstantiatorService(swtpmBin, tpmPath)
+
+	// create swtpm
 	instance, err := service.Create()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	defer service.Destroy(instance)
+
+	fmt.Printf("SWTPM socket path: %s\n", instance.SocketPath)
+
+	// create firecracker config
+	data := firecracker.SimpleTemplateData{
+		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/with-init-kernel",
+		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/with-init-initrd.img",
+		TpmSocket:       instance.SocketPath,
+	}
+	err = firecracker.NewFirecrackerConfig("simple", data, fcTmplPath)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	// wait for input
 	r := bufio.NewReader(os.Stdin)
 	fmt.Print("Press enter to stop swtpm...")
 	_, _ = r.ReadString('\n')
-
-	service.Destroy(instance)
 
 }
