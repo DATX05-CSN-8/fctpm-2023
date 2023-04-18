@@ -35,7 +35,7 @@ RUN curl -fsSLO ${KERNEL_SOURCE} && \
     bsdtar xf linux-${KERNEL_VERSION}.tar.xz && \
     mv linux-${KERNEL_VERSION} /linux
 
-ENV CONFIG_NAME=my
+ENV CONFIG_NAME=tpm-enabled
 COPY /${CONFIG_NAME}.config /linux/.config
 
 
