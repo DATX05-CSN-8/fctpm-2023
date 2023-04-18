@@ -24,7 +24,8 @@ RUN apk add \
     sed \
     xz \
     xz-dev \
-    zlib-dev
+    zlib-dev \
+    patch
 
 RUN mkdir /out
 
@@ -34,14 +35,20 @@ RUN curl -fsSLO ${KERNEL_SOURCE} && \
     bsdtar xf linux-${KERNEL_VERSION}.tar.xz && \
     mv linux-${KERNEL_VERSION} /linux
 
-COPY /my.config /linux/.config
+ENV CONFIG_NAME=tpm-enabled
+COPY /${CONFIG_NAME}.config /linux/.config
+
 
 WORKDIR /linux
+
+RUN mkdir /patches
+COPY /patches/* /patches/
+RUN for f in /patches/*; do patch -p1 < ../$f; done
 
 # # Configure and compile the kernel
 # # (individual run commands for easier debug)
 RUN make oldconfig
-RUN make -j "$(getconf _NPROCESSORS_ONLN)" KCFLAGS="-fno-pie"
+RUN bash -c make -j "$(getconf _NPROCESSORS_ONLN)" KCFLAGS="-fno-pie"
 RUN cp arch/x86_64/boot/bzImage /out/kernel
 RUN cp System.map /out
 RUN make -j "$(getconf _NPROCESSORS_ONLN)" KCFLAGS="-fno-pie" INSTALL_MOD_PATH=/tmp/kernel-modules modules_install

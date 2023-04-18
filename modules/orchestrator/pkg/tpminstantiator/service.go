@@ -35,7 +35,6 @@ func joinPath(paths []string) string {
 }
 func ensureDirectory(paths ...string) (string, error) {
 	path := joinPath(paths)
-	println("Path", path)
 	err := os.MkdirAll(path, os.ModePerm)
 	return path, err
 }
@@ -48,7 +47,13 @@ func (s *tpmInstantiatorService) Create() (*TpmInstance, error) {
 		return nil, err
 	}
 	socketPath := joinPath([]string{path, "socket"})
-	cmd := exec.Command(s.swtpmPath, "socket", "--tpmstate", "dir="+path, "--tpm2", "--ctrl", "type=unixio,path="+socketPath, "--log", "level=20")
+	cmd := exec.Command(
+		s.swtpmPath, "socket",
+		"--tpmstate", "dir="+path,
+		"--tpm2", "--ctrl", "type=unixio,path="+socketPath,
+		"--log", "level=20",
+		"--flags", "startup-clear",
+	)
 
 	out, err := cmd.StdoutPipe()
 	if err != nil {
@@ -69,7 +74,8 @@ func (s *tpmInstantiatorService) Create() (*TpmInstance, error) {
 				log.Fatal("Negative read swtpm", id)
 			}
 			sb.Write(b[:c])
-			fmt.Printf("swtpm-%s: %s\n", id, b[:c])
+			fmt.Printf("%s\n", b[:c])
+			// fmt.Printf("swtpm-%s: %s\n", id, b[:c])
 			if e == io.EOF {
 				return
 			}
