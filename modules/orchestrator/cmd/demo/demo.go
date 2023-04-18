@@ -15,6 +15,11 @@ func main() {
 		fmt.Println("SWTPM_BIN environment variable needs to be specified")
 		return
 	}
+	swtpmBiosBin := os.Getenv("SWTPM_BIOS_BIN")
+	if len(swtpmBiosBin) == 0 {
+		fmt.Println("SWTPM_BIOS_BIN envioronment variable needs to be specified")
+		return
+	}
 	tpmPath := os.Getenv("TPM_PATH")
 	if len(tpmPath) == 0 {
 		fmt.Println("TPM_PATH environmnent variable needs to be specified")
@@ -26,7 +31,7 @@ func main() {
 		return
 	}
 
-	service := tpminstantiator.NewTpmInstantiatorService(swtpmBin, tpmPath)
+	service := tpminstantiator.NewTpmInstantiatorService(swtpmBin, swtpmBiosBin, tpmPath)
 
 	// create swtpm
 	instance, err := service.Create()
@@ -36,19 +41,20 @@ func main() {
 	}
 	defer service.Destroy(instance)
 
-	fmt.Printf("SWTPM socket path: %s\n", instance.SocketPath)
+	fmt.Printf("SWTPM device path: %s\n", instance.DevicePath)
 
 	// create firecracker config
 	data := firecracker.SimpleTemplateData{
 		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel",
 		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img",
-		TpmSocket:       instance.SocketPath,
+		TpmSocket:       instance.DevicePath,
 	}
 	err = firecracker.NewFirecrackerConfig("simple", data, fcTmplPath)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+
 	// wait for input
 	r := bufio.NewReader(os.Stdin)
 	fmt.Print("Press enter to stop swtpm...")

@@ -28,4 +28,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gorm.io/driver/sqlite v1.4.4 // indirect
 	gorm.io/gorm v1.24.5 // indirect
+	kernel.org/pub/linux/libs/security/libcap/cap v1.2.68 // indirect
+	kernel.org/pub/linux/libs/security/libcap/psx v1.2.68 // indirect
 )

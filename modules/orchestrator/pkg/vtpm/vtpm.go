@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"kernel.org/pub/linux/libs/security/libcap/cap"
 )
 
 // object
@@ -121,6 +123,8 @@ func vtpmx_ioctl(cmd, msg uintptr) error {
 		return err
 	}
 	defer vtpmx.Close()
+	procs := cap.GetProc()
+	fmt.Println("Current caps: ", procs)
 
 	if err := ioctl(uintptr(vtpmx.Fd()), cmd, msg); err != nil {
 		return fmt.Errorf("VTPM: vtpmx ioctl failed: %v", err)
@@ -570,7 +574,7 @@ func (vtpm *VTPM) startSwtpm() error {
 
 	tpmstate := fmt.Sprintf("dir=%s", vtpm.StatePath)
 	pidfile := fmt.Sprintf("file=%s", vtpm.getPidFile())
-	logfile := fmt.Sprintf("file=%s", vtpm.getLogFile())
+	logfile := fmt.Sprintf("level=20,file=%s", vtpm.getLogFile())
 
 	flags := "not-need-init"
 	if hasCapability(vtpm.swtpmCaps, "flags-opt-startup") {
@@ -655,7 +659,10 @@ func (vtpm *VTPM) Start() (bool, error) {
 
 	vtpm.Stop(false)
 
-	createdStatePath, err := vtpm.createStatePath()
+	// createdStatePath, err := vtpm.createStatePath()
+	createdStatePath := false
+
+	err := vtpm.runSwtpmSetup()
 	if err != nil {
 		return false, err
 	}
@@ -664,17 +671,12 @@ func (vtpm *VTPM) Start() (bool, error) {
 			vtpm.Stop(createdStatePath)
 		}
 	}()
-
-	err = vtpm.runSwtpmSetup()
-	if err != nil {
-		return false, err
-	}
 	// set the directory accesses for vtpm.user after swtpm_setup may have needed higher
 	// privileges
-	err = vtpm.chownStatePath()
-	if err != nil {
-		return false, err
-	}
+	// err = vtpm.chownStatePath()
+	// if err != nil {
+	// 	return false, err
+	// }
 
 	err = vtpm.startSwtpm()
 	if err != nil {

@@ -72,3 +72,7 @@ gorm.io/driver/sqlite v1.4.4/go.mod h1:0Aq3iPO+v9ZKbcdiz8gLWRw5VOPcBOPUQJFLq5e2e
 gorm.io/gorm v1.24.0/go.mod h1:DVrVomtaYTbqs7gB/x2uVvqnXzv0nqjB396B8cG4dBA=
 gorm.io/gorm v1.24.5 h1:g6OPREKqqlWq4kh/3MCQbZKImeB9e6Xgc4zD+JgNZGE=
 gorm.io/gorm v1.24.5/go.mod h1:DVrVomtaYTbqs7gB/x2uVvqnXzv0nqjB396B8cG4dBA=
+kernel.org/pub/linux/libs/security/libcap/cap v1.2.68 h1:137hV1K92dqIjdd46hSJbiKodzfo3pju8uiG6zj1qHY=
+kernel.org/pub/linux/libs/security/libcap/cap v1.2.68/go.mod h1:zf5gr/6UXqeTEc9fhJG1u+HD/4yhZ0p1vQSyKAI58Io=
+kernel.org/pub/linux/libs/security/libcap/psx v1.2.68 h1:mhMQVtZZ0wXqAAbP9RocmtScWn1EY/s2Ghrt/oejKrc=
+kernel.org/pub/linux/libs/security/libcap/psx v1.2.68/go.mod h1:+l6Ee2F59XiJ2I6WR5ObpC1utCQJZ/VLsEbQCD8RG24=
