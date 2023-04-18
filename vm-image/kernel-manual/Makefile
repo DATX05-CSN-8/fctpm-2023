@@ -1,4 +1,4 @@
-CONFIG_NAME = minimal
+CONFIG_NAME = virtio-tpm-enabled
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 KERNEL_DIR ?= $(HOME)/linux
 
