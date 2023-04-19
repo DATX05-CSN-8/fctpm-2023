@@ -2,7 +2,6 @@ package tpminstantiator
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -19,71 +18,67 @@ type tpmInstantiatorService struct {
 type TpmInstance struct {
 	Id         string
 	SocketPath string
+	DirPath    string
 	proc       *os.Process
-	sb         *strings.Builder
+	keepDir    bool
 }
 
-func NewTpmInstantiatorService(swtpmPath string, basePath string) *tpmInstantiatorService {
+func NewTpmInstantiatorService(basePath string) *tpmInstantiatorService {
 	return &tpmInstantiatorService{
-		swtpmPath: swtpmPath,
-		basePath:  basePath,
+		basePath: basePath,
 	}
 }
 
-func joinPath(paths []string) string {
+func joinPath(paths ...string) string {
 	return strings.Join(paths, string(os.PathSeparator))
 }
-func ensureDirectory(paths ...string) (string, error) {
-	path := joinPath(paths)
+func ensureDirectory(path string) error {
 	err := os.MkdirAll(path, os.ModePerm)
-	return path, err
+	return err
+}
+
+func (s *tpmInstantiatorService) setupState(path string) error {
+	cmd := exec.Command("swtpm_setup", "--tpm-state",
+		path, "--createek", "--tpm2",
+		"--create-ek-cert", "--create-platform-cert", "--lock-nvram", "--logfile",
+		joinPath(path, "swtpm_setup.log"),
+	)
+	err := cmd.Start()
+	if err != nil {
+		log.Fatalf("Error executing swtpm_setup %s", err)
+	}
+	err = cmd.Wait()
+	if err != nil {
+		log.Fatalf("Error executing swtpm_setup %s", err)
+	}
+	return nil
 }
 
 func (s *tpmInstantiatorService) Create() (*TpmInstance, error) {
-	// TODO instantiate TPM
 	id := uuid.NewString()
-	path, err := ensureDirectory(s.basePath, id)
+	path := joinPath(s.basePath, id)
+	err := ensureDirectory(path)
 	if err != nil {
 		return nil, err
 	}
-	socketPath := joinPath([]string{path, "socket"})
+	// setup swtpm state
+	err = s.setupState(path)
+	if err != nil {
+		return nil, err
+	}
+	socketPath := joinPath(path, "socket")
 	cmd := exec.Command(
-		s.swtpmPath, "socket",
+		"swtpm", "socket",
 		"--tpmstate", "dir="+path,
 		"--tpm2", "--ctrl", "type=unixio,path="+socketPath,
-		"--log", "level=20",
 		"--flags", "startup-clear",
+		"--log", "file="+joinPath(path, "swtpm.log"),
 	)
-
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	cmd.Stderr = cmd.Stdout
 
 	err = cmd.Start()
 	if err != nil {
 		return nil, err
 	}
-	var sb strings.Builder
-	go func() {
-		b := make([]byte, 32)
-		for {
-			c, e := out.Read(b)
-			if c < 0 {
-				log.Fatal("Negative read swtpm", id)
-			}
-			sb.Write(b[:c])
-			fmt.Printf("%s\n", b[:c])
-			// fmt.Printf("swtpm-%s: %s\n", id, b[:c])
-			if e == io.EOF {
-				return
-			}
-			if e != nil {
-				log.Fatal(e)
-			}
-		}
-	}()
 
 	go func() {
 		cmd.Wait()
@@ -93,7 +88,7 @@ func (s *tpmInstantiatorService) Create() (*TpmInstance, error) {
 		Id:         id,
 		SocketPath: socketPath,
 		proc:       cmd.Process,
-		sb:         &sb,
+		DirPath:    path,
 	}, nil
 }
 
@@ -105,7 +100,10 @@ func (s *tpmInstantiatorService) Destroy(instance *TpmInstance) error {
 		fmt.Println("Error occured when stopping swtpm process.", err)
 		return err
 	}
-	path := joinPath([]string{s.basePath, instance.Id})
+	path := joinPath(s.basePath, instance.Id)
+	if instance.keepDir {
+		return nil
+	}
 	err = os.RemoveAll(path)
 	if err != nil {
 		fmt.Println("Error occurred when removing swtpm directory", err)

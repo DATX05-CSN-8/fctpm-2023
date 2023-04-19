@@ -10,11 +10,6 @@ import (
 )
 
 func main() {
-	swtpmBin := os.Getenv("SWTPM_BIN")
-	if len(swtpmBin) == 0 {
-		fmt.Println("SWTPM_BIN environment variable needs to be specified")
-		return
-	}
 	tpmPath := os.Getenv("TPM_PATH")
 	if len(tpmPath) == 0 {
 		fmt.Println("TPM_PATH environmnent variable needs to be specified")
@@ -26,7 +21,7 @@ func main() {
 		return
 	}
 
-	service := tpminstantiator.NewTpmInstantiatorService(swtpmBin, tpmPath)
+	service := tpminstantiator.NewTpmInstantiatorService(tpmPath)
 
 	// create swtpm
 	instance, err := service.Create()
