@@ -34,6 +34,10 @@ func NewVMStarterService(fcc firecracker.FirecrackerClient, infoRepo infoRepo, e
 }
 
 func (s *vmStarterService) StartVM(config string) (string, error) {
+	return s.StartVMWithStartTime(config, time.Now())
+}
+
+func (s *vmStarterService) StartVMWithStartTime(config string, started time.Time) (string, error) {
 	// generate ID
 	id := uuid.NewString()
 	// start execution
@@ -41,7 +45,6 @@ func (s *vmStarterService) StartVM(config string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	started := time.Now()
 	vmexec := vmexecution.NewVMExecution(id, exec)
 	vi := vminfo.NewVMInfo(id, started)
 	// persist info
@@ -56,6 +59,7 @@ func (s *vmStarterService) StartVM(config string) (string, error) {
 	}
 	// add subscriber to update info
 	(*exec).Subscribe(func(status vminfo.Status) {
+		vi.EndTime = time.Now()
 		// get logs
 		logs := (*exec).Logs()
 		// parse logs
