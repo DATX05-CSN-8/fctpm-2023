@@ -1,0 +1,4 @@
+2023-04-20T16:23:03.310875698 [anonymous-instance:main:WARN:src/devices/src/legacy/serial.rs:257] Failed to register serial input fd: event_manager: failed to manage epoll file descriptor: Operation not permitted (os error 1)
+2023-04-20T16:23:03.345127928 [anonymous-instance:fc_vcpu 0:WARN:src/devices/src/legacy/i8042.rs:121] Failed to trigger i8042 kbd interrupt (disabled by guest OS)
+2023-04-20T16:23:03.355488091 [anonymous-instance:fc_vcpu 0:WARN:src/devices/src/legacy/i8042.rs:121] Failed to trigger i8042 kbd interrupt (disabled by guest OS)
+2023-04-20T16:23:03.620899162 [anonymous-instance:fc_vcpu 0:WARN:src/devices/src/pseudo/boot_timer.rs:28] Guest-boot-time = 314218 us 314 ms,  76741 CPU us 76 CPU ms
