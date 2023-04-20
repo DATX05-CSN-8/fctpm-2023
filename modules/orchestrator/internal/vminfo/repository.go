@@ -1,6 +1,8 @@
 package vminfo
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+)
 
 type Repository interface {
 	FindAll() ([]VMInfo, error)
@@ -35,8 +37,8 @@ func (r *repository) FindById(id string) (VMInfo, error) {
 	return vmInfo, err
 }
 
-func (r *repository) Update(vmInfo VMInfo) (VMInfo, error) {
-	err := r.db.Save(&vmInfo).Error
+func (r *repository) Update(vmInfo *VMInfo) (*VMInfo, error) {
+	err := r.db.Save(vmInfo).Error
 	return vmInfo, err
 }
 
