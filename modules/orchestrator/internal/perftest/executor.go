@@ -24,7 +24,7 @@ func NewPerftestExecutor(total int, concurrent int) *perftestExecutor {
 
 func (pte *perftestExecutor) RunPerftest(runner perftestRunner) error {
 	sem := make(chan int, pte.concurrent)
-	errMutex := make(chan int)
+	errMutex := make(chan int, 1)
 	errs := make([]error, 0)
 	for i := 0; i < pte.total; i++ {
 		sem <- 1
