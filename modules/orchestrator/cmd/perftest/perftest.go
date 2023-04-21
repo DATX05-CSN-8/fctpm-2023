@@ -24,13 +24,35 @@ func genDefaultFCBinPath() string {
 	return wd + "/../firecracker/bin/firecracker"
 }
 
+func removeFileIfExists(filename string) error {
+	_, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return os.Remove(filename)
+}
+
 func main() {
 
 	dbPath := flag.String("db-path", "test.db", "File path to the db file to be used for sqlite")
 	fcPath := flag.String("firecracker-bin", genDefaultFCBinPath(), "File path to the firecracker binary that should be used")
 	resultPath := flag.String("result-path", "output.csv", "Path to CSV file to create")
 	tempPath := flag.String("temp-path", "/tmp/firecracker-perftest", "Path to temporary data directory")
+	clean := flag.Bool("clean", false, "Clean the output database and csv")
 	flag.Parse()
+
+	if *clean {
+		err := removeFileIfExists(*dbPath)
+		if err != nil {
+			fmt.Println("Error occurred removing db")
+			panic(err)
+		}
+		err = removeFileIfExists(*resultPath)
+		if err != nil {
+			fmt.Println("Error occurred removing result file")
+			panic(err)
+		}
+	}
 
 	db, err := gorm.Open(sqlite.Open(*dbPath), &gorm.Config{})
 	if err != nil {
@@ -56,6 +78,7 @@ func main() {
 	fmt.Println("Running perf test")
 	err = perftestExecutor.RunPerftest(runner)
 	if err != nil {
+		fmt.Println("Error occurred running perftest")
 		panic(err)
 	}
 
