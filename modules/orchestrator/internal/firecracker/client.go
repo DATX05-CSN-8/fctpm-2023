@@ -1,6 +1,7 @@
 package firecracker
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -49,6 +50,7 @@ func (c *FirecrackerClient) Start(configPath string) (*FirecrackerExecution, err
 				return
 			}
 			if e != nil {
+				fmt.Println("Error reading logs")
 				log.Fatal(e)
 			}
 		}

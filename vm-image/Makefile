@@ -2,6 +2,7 @@ DIRS = init simple_init kernel
 ORG ?= $(USER)
 LOOP ?= /dev/loop0
 IMG_NAME = fc-image
+INIT_NAME ?= init
 
 clean: 
 	rm -rf out \
@@ -21,7 +22,7 @@ out/build-pkg: out
 	touch out/build-pkg
 
 img/$(IMG_NAME).yml: out/build-pkg
-	KERNEL_IMAGE=$$(cat kernel/PKG_TAG) INIT_IMAGE=$$(cat simple_init/PKG_TAG) envsubst < img/$(IMG_NAME).yml.tmpl > img/$(IMG_NAME).yml
+	KERNEL_IMAGE=$$(cat kernel/PKG_TAG) INIT_IMAGE=$$(cat $(INIT_NAME)/PKG_TAG) envsubst < img/$(IMG_NAME).yml.tmpl > img/$(IMG_NAME).yml
 
 out/fc-image-kernel: img/$(IMG_NAME).yml
 	linuxkit build --format kernel+initrd --decompress-kernel -dir out img/$(IMG_NAME).yml

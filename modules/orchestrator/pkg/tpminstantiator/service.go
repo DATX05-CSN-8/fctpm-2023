@@ -6,27 +6,19 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 type tpmInstantiatorService struct {
-	swtpmPath string
-	basePath  string
 }
 
 type TpmInstance struct {
-	Id         string
 	SocketPath string
 	DirPath    string
 	proc       *os.Process
-	keepDir    bool
 }
 
-func NewTpmInstantiatorService(basePath string) *tpmInstantiatorService {
-	return &tpmInstantiatorService{
-		basePath: basePath,
-	}
+func NewTpmInstantiatorService() *tpmInstantiatorService {
+	return &tpmInstantiatorService{}
 }
 
 func joinPath(paths ...string) string {
@@ -54,15 +46,9 @@ func (s *tpmInstantiatorService) setupState(path string) error {
 	return nil
 }
 
-func (s *tpmInstantiatorService) Create() (*TpmInstance, error) {
-	id := uuid.NewString()
-	path := joinPath(s.basePath, id)
-	err := ensureDirectory(path)
-	if err != nil {
-		return nil, err
-	}
+func (s *tpmInstantiatorService) Create(path string) (*TpmInstance, error) {
 	// setup swtpm state
-	err = s.setupState(path)
+	err := s.setupState(path)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +71,6 @@ func (s *tpmInstantiatorService) Create() (*TpmInstance, error) {
 	}()
 
 	return &TpmInstance{
-		Id:         id,
 		SocketPath: socketPath,
 		proc:       cmd.Process,
 		DirPath:    path,
@@ -98,15 +83,6 @@ func (s *tpmInstantiatorService) Destroy(instance *TpmInstance) error {
 		// Do nothing
 	} else if err != nil {
 		fmt.Println("Error occured when stopping swtpm process.", err)
-		return err
-	}
-	path := joinPath(s.basePath, instance.Id)
-	if instance.keepDir {
-		return nil
-	}
-	err = os.RemoveAll(path)
-	if err != nil {
-		fmt.Println("Error occurred when removing swtpm directory", err)
 		return err
 	}
 	return nil

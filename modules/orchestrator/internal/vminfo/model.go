@@ -17,6 +17,7 @@ type VMInfo struct {
 	Id        string `gorm:"primary_key"`
 	StartTime time.Time
 	ExecTime  time.Duration
+	EndTime   time.Time
 	Status    Status
 }
 
@@ -26,6 +27,7 @@ func NewVMInfo(id string, startTime time.Time) VMInfo {
 		Id:        id,
 		StartTime: startTime,
 		ExecTime:  zeroDuration,
+		EndTime:   startTime,
 		Status:    Running,
 	}
 }

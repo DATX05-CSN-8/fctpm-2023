@@ -11,7 +11,7 @@ type BootTime struct {
 	CpuTime  time.Duration
 }
 
-var exp = regexp.MustCompile(`(?im)Guest-boot-time = (\d+) us \d+ ms, (\d+) CPU us \d+ CPU ms$`)
+var exp = regexp.MustCompile(`(?im)Guest-boot-time = (\d+) us \d+ ms, +(\d+) CPU us \d+ CPU ms$`)
 
 func parseLogsForBootTime(logs string) (*BootTime, error) {
 	found := exp.FindStringSubmatch(logs)

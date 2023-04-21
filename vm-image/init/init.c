@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/reboot.h> 
+#include <stdio.h>
 
 /*
  * This little program is a mock 'init' process. It writes the firecracker debug port.
@@ -17,8 +18,12 @@ int main(void)
 {
     // set up boot timer device mmio
     int fd = open("/dev/mem", (O_RDWR | O_SYNC | O_CLOEXEC));
+    if (fd == -1) {
+        perror("Error opening file: ");
+        return -1;
+    }
+    
     int mapped_size = getpagesize();
-
     char *map_base = mmap(NULL,
             mapped_size,
             PROT_WRITE,
@@ -29,8 +34,5 @@ int main(void)
     // write guest boot complete command
     *map_base = MAGIC_VALUE_SIGNAL_GUEST_BOOT_COMPLETE;
     msync(map_base, mapped_size, MS_ASYNC);
-
-    // trigger reboot
-    reboot(RB_AUTOBOOT);
     return 0;
 }

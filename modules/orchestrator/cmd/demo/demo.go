@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
 )
@@ -21,10 +22,13 @@ func main() {
 		return
 	}
 
-	service := tpminstantiator.NewTpmInstantiatorService(tpmPath)
-
+	service := tpminstantiator.NewTpmInstantiatorService()
+	tempDirPath, err := dirutil.CreateTempDir(tpmPath)
+	if err != nil {
+		panic(err)
+	}
 	// create swtpm
-	instance, err := service.Create()
+	instance, err := service.Create(tempDirPath)
 	if err != nil {
 		fmt.Println(err)
 		return
