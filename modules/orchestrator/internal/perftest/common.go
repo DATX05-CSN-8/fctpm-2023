@@ -1,6 +1,7 @@
 package perftest
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmdata"
@@ -24,6 +25,12 @@ func startvmBlocking(starter VmStarter, configpath string, time time.Time) error
 	exec.Exec.Subscribe(func(status vminfo.Status) {
 		outchan <- 1
 	})
+	// Need not wait as we did not have time to subscribe.
+	if exec.Exec.Status() == vminfo.Error {
+		return fmt.Errorf(exec.Exec.Logs())
+	} else if exec.Exec.Status() == vminfo.Stopped {
+		return nil
+	}
 	// wait for completion
 	<-outchan
 	return nil
