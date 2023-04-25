@@ -7,15 +7,18 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 type FirecrackerClient struct {
 	binaryPath string
+	timeout    time.Duration
 }
 
 func NewFirecrackerClient(binaryPath string) *FirecrackerClient {
 	return &FirecrackerClient{
 		binaryPath: binaryPath,
+		timeout:    4 * time.Second,
 	}
 }
 
@@ -58,8 +61,17 @@ func (c *FirecrackerClient) Start(configPath string) (*FirecrackerExecution, err
 
 	outpc := make(chan error, 1)
 	go func() {
-		// TODO timeout
-		outpc <- fcCmd.Wait()
+
+		waitc := make(chan error, 1)
+		go func() {
+			waitc <- fcCmd.Wait()
+		}()
+		select {
+		case ret := <-waitc:
+			outpc <- ret
+		case <-time.After(c.timeout):
+			outpc <- fmt.Errorf("Timeout while running Firecracker")
+		}
 	}()
 	return newFirecrackerExecution(&sb, outpc), nil
 }
