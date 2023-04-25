@@ -58,6 +58,7 @@ func (c *FirecrackerClient) Start(configPath string) (*FirecrackerExecution, err
 
 	outpc := make(chan error, 1)
 	go func() {
+		// TODO timeout
 		outpc <- fcCmd.Wait()
 	}()
 	return newFirecrackerExecution(&sb, outpc), nil

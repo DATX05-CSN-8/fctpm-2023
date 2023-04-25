@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/perftest"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmdata"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmexecution"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmstarter"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -24,12 +26,29 @@ func genDefaultFCBinPath() string {
 	return wd + "/../firecracker/bin/firecracker"
 }
 
-func removeFileIfExists(filename string) error {
-	_, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return nil
+func getLogWriterFn(logPath *string) (func(*string), error) {
+	err := dirutil.RemoveDirIfExists(*logPath)
+	if err != nil {
+		return nil, err
 	}
-	return os.Remove(filename)
+	err = dirutil.EnsureDirectory(*logPath)
+	if err != nil {
+		return nil, err
+	}
+	idx := 0
+	idxmutex := make(chan int, 1)
+	fn := func(logs *string) {
+		idxmutex <- 1
+		i := idx
+		idx += 1
+		<-idxmutex
+		filename := fmt.Sprint(i) + "-bootlog"
+		err := os.WriteFile(dirutil.JoinPath(*logPath, filename), []byte(*logs), 0644)
+		if err != nil {
+			fmt.Printf("An error occurred writing logs: %s", err)
+		}
+	}
+	return fn, nil
 }
 
 func main() {
@@ -39,15 +58,17 @@ func main() {
 	resultPath := flag.String("result-path", "output.csv", "Path to CSV file to create")
 	tempPath := flag.String("temp-path", "/tmp/firecracker-perftest", "Path to temporary data directory")
 	clean := flag.Bool("clean", false, "Clean the output database and csv")
+	bootLogPath := flag.String("boot-log-path", "", "(optional) path to output boot logs")
+	rtype := flag.String("type", "baseline", "Type of performance test to run. Either 'baseline' or 'tpm'")
 	flag.Parse()
 
 	if *clean {
-		err := removeFileIfExists(*dbPath)
+		err := dirutil.RemoveFileIfExists(*dbPath)
 		if err != nil {
 			fmt.Println("Error occurred removing db")
 			panic(err)
 		}
-		err = removeFileIfExists(*resultPath)
+		err = dirutil.RemoveFileIfExists(*resultPath)
 		if err != nil {
 			fmt.Println("Error occurred removing result file")
 			panic(err)
@@ -63,7 +84,18 @@ func main() {
 	fcClient := firecracker.NewFirecrackerClient(*fcPath)
 	vminfoRepo := vminfo.NewRepository(db)
 	vmExecRepo := vmexecution.NewRepository()
-	vmstarterService := vmstarter.NewVMStarterService(*fcClient, vminfoRepo, vmExecRepo)
+	var vmstarterService perftest.VmStarter
+	if *bootLogPath != "" {
+		logWriterFn, err := getLogWriterFn(bootLogPath)
+		if err != nil {
+			fmt.Println("Error occurred creating log writer fn")
+			panic(err)
+		}
+		vmstarterService = vmstarter.NewVMStarterServiceWithLogs(*fcClient, vminfoRepo, vmExecRepo, logWriterFn)
+	} else {
+		vmstarterService = vmstarter.NewVMStarterService(*fcClient, vminfoRepo, vmExecRepo)
+	}
+
 	dataRetrieverService := vmdata.NewVMDataRetriever(vminfoRepo, vmExecRepo)
 
 	perftestExecutor := perftest.NewPerftestExecutor(5, 1)
@@ -71,8 +103,26 @@ func main() {
 		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel",
 		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img",
 	}
-	runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, "256-no-tpm", *tempPath, *resultPath)
-	runner := perftest.NewBaselineRunner(runnerCfg, vmstarterService, dataRetrieverService)
+
+	var runner perftest.PerftestRunner
+	if *rtype == "baseline" {
+		templateName := "256-no-tpm"
+		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
+		runner = perftest.NewBaselineRunner(runnerCfg, vmstarterService, dataRetrieverService)
+	} else if *rtype == "tpm" {
+		templateName := "256-tpm"
+		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
+		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
+		err = dirutil.EnsureDirectory(tpmPath)
+		if err != nil {
+			fmt.Println("Could not create temp tpm directory")
+			panic(err)
+		}
+		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
+		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpminst)
+	} else {
+		panic("Invalid performance test type: '" + *rtype + "'.")
+	}
 
 	// execute
 	fmt.Println("Running perf test")

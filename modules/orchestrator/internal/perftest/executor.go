@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-type perftestRunner interface {
+type PerftestRunner interface {
 	// Assumed to be blocking
 	RunInstance() error
 	Finish() error
@@ -22,7 +22,7 @@ func NewPerftestExecutor(total int, concurrent int) *perftestExecutor {
 	}
 }
 
-func (pte *perftestExecutor) RunPerftest(runner perftestRunner) error {
+func (pte *perftestExecutor) RunPerftest(runner PerftestRunner) error {
 	sem := make(chan int, pte.concurrent)
 	errMutex := make(chan int, 1)
 	errs := make([]error, 0)
