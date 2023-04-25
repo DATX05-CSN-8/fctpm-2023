@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/socketwaiter"
 	"github.com/google/uuid"
 )
 
@@ -82,12 +83,19 @@ func (s *tpmInstantiatorService) Allocate() (*TpmInstance, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	waitchan := socketwaiter.WaitForSocketFile(path, "socket", 1*time.Second)
+
 	instance, err := s.Create(path)
 	if err != nil {
 		return nil, err
 	}
-	// TODO use fsnotify here to wait until socket file exists
-	time.Sleep(time.Millisecond * 100)
+
+	err = <-waitchan
+	if err != nil {
+		defer s.Return(instance)
+		return nil, err
+	}
 	return instance, nil
 }
 
