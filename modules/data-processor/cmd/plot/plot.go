@@ -4,7 +4,6 @@ import (
 	"flag"
 	"image/color"
 	"math/rand"
-	"sort"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/data-processor/internal/csvreader"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/data-processor/internal/inputdataparser"
@@ -33,12 +32,7 @@ func main() {
 			panic(err)
 		}
 
-		deltas := make([]float64, len(parsed))
-		for i, d := range parsed {
-			delta := float64(d.End.Sub(d.Start).Microseconds()) / 1000
-			deltas[i] = delta
-		}
-		sort.Float64s(deltas)
+		deltas := csvreader.CalculateDeltas(parsed)
 
 		fn := plotter.NewFunction(func(x float64) float64 {
 			var sz float64 = 0
