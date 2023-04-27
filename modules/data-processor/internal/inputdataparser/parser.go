@@ -6,8 +6,8 @@ import (
 )
 
 type InputData struct {
-	name string
-	file string
+	Name string
+	File string
 }
 
 type InputDataList []InputData
@@ -15,7 +15,7 @@ type InputDataList []InputData
 func (i *InputDataList) String() string {
 	var sb strings.Builder
 	for _, id := range *i {
-		sb.WriteString(fmt.Sprintf("Name: %s, File: %s\n", id.name, id.file))
+		sb.WriteString(fmt.Sprintf("Name: %s, File: %s\n", id.Name, id.File))
 	}
 	return sb.String()
 }
@@ -34,8 +34,8 @@ func (i *InputDataList) Set(value string) error {
 	}
 	path := splitted[1]
 	*i = append(*i, InputData{
-		name: name,
-		file: path,
+		Name: name,
+		File: path,
 	})
 	return nil
 }
