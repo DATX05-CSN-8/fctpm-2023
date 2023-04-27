@@ -67,6 +67,10 @@ func main() {
 		fn.XMin = deltas[0]
 		fn.XMax = last
 	}
+	grid := plotter.NewGrid()
+	p.Add(grid)
+	p.X.Tick.Marker = MyTicker{width: 5, labelwidth: 20, labelfmt: "%.f"}
+	p.Y.Tick.Marker = MyTicker{width: 0.05, labelwidth: 0.2, labelfmt: "%.1f"}
 	p.X.Min = min - float64(extraSize)
 	p.X.Max = max + float64(extraSize)
 	p.Y.Min = 0
