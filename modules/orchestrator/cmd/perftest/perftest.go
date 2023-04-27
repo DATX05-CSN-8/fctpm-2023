@@ -60,6 +60,8 @@ func main() {
 	clean := flag.Bool("clean", false, "Clean the output database and csv")
 	bootLogPath := flag.String("boot-log-path", "", "(optional) path to output boot logs")
 	rtype := flag.String("type", "baseline", "Type of performance test to run. Either 'baseline' or 'tpm'")
+	totalVms := flag.Int("total-vms", 20, "The total number of VMs to run as part of the perf test scenario.")
+	parallelism := flag.Int("parallelism", 1, "The number of VMs to run in parallel as part of the scenario")
 	flag.Parse()
 
 	if *clean {
@@ -98,7 +100,7 @@ func main() {
 
 	dataRetrieverService := vmdata.NewVMDataRetriever(vminfoRepo, vmExecRepo)
 
-	perftestExecutor := perftest.NewPerftestExecutor(5, 1)
+	perftestExecutor := perftest.NewPerftestExecutor(*totalVms, *parallelism)
 	baseTemplateData := firecracker.SimpleTemplateData{
 		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel",
 		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img",
