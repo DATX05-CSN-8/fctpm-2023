@@ -6,16 +6,15 @@ import (
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmdata"
-	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
 )
 
 type baselineRunner struct {
 	config        *testRunnerConfig
-	starter       vmStarter
+	starter       VmStarter
 	inforetriever *vmdata.VMDataRetriever
 }
 
-func NewBaselineRunner(config *testRunnerConfig, starter vmStarter, infoRetriever *vmdata.VMDataRetriever) *baselineRunner {
+func NewBaselineRunner(config *testRunnerConfig, starter VmStarter, infoRetriever *vmdata.VMDataRetriever) *baselineRunner {
 	return &baselineRunner{
 		config:        config,
 		starter:       starter,
@@ -30,7 +29,6 @@ func (br *baselineRunner) RunInstance() error {
 	}
 	defer dirutil.RemoveTempDir(path)
 	configPath := dirutil.JoinPath(path, br.config.templateName+".json")
-	outchan := make(chan int)
 
 	time := time.Now()
 	// generate config file
@@ -38,22 +36,9 @@ func (br *baselineRunner) RunInstance() error {
 	if err != nil {
 		return err
 	}
-	exec, err := br.starter.StartVMWithStartTime(configPath, time)
-	if err != nil {
-		return err
-	}
-	exec.Exec.Subscribe(func(status vminfo.Status) {
-		outchan <- 1
-	})
-	// wait for completion
-	<-outchan
-	return nil
+	return startvmBlocking(br.starter, configPath, time)
 }
 
 func (br *baselineRunner) Finish() error {
-	data, err := br.inforetriever.GetAllInfo()
-	if err != nil {
-		return err
-	}
-	return writeDataToCsv(data, br.config.resultPath)
+	return finish(br.inforetriever, &br.config.resultPath)
 }

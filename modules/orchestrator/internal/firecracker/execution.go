@@ -1,6 +1,7 @@
 package firecracker
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
@@ -20,6 +21,7 @@ func newFirecrackerExecution(sb *strings.Builder, outpc chan error) *Firecracker
 	go func() {
 		err := <-outpc
 		if err != nil {
+			sb.WriteString(fmt.Sprintf("Error occurred: %s", err.Error()))
 			status = vminfo.Error
 		} else {
 			status = vminfo.Stopped

@@ -9,6 +9,7 @@ import (
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmexecution"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
 )
 
 type testRunnerConfig struct {
@@ -18,8 +19,13 @@ type testRunnerConfig struct {
 	resultPath   string
 }
 
-type vmStarter interface {
+type VmStarter interface {
 	StartVMWithStartTime(config string, started time.Time) (*vmexecution.VMExecution, error)
+}
+
+type tpmallocator interface {
+	Allocate() (*tpminstantiator.TpmInstance, error)
+	Return(*tpminstantiator.TpmInstance) error
 }
 
 func NewTestRunnerConfig(templateData *firecracker.SimpleTemplateData, templateName string, tempPath string, resultPath string) *testRunnerConfig {

@@ -24,6 +24,7 @@ type vmStarterService struct {
 	fcc           firecracker.FirecrackerClient
 	infoRepo      infoRepo
 	executionRepo executionRepo
+	logWriterFn   func(*string)
 }
 
 func NewVMStarterService(fcc firecracker.FirecrackerClient, infoRepo infoRepo, executionRepo executionRepo) *vmStarterService {
@@ -31,6 +32,20 @@ func NewVMStarterService(fcc firecracker.FirecrackerClient, infoRepo infoRepo, e
 		fcc:           fcc,
 		infoRepo:      infoRepo,
 		executionRepo: executionRepo,
+	}
+}
+
+func NewVMStarterServiceWithLogs(
+	fcc firecracker.FirecrackerClient,
+	infoRepo infoRepo,
+	executionRepo executionRepo,
+	logWriterFn func(*string),
+) *vmStarterService {
+	return &vmStarterService{
+		fcc:           fcc,
+		infoRepo:      infoRepo,
+		executionRepo: executionRepo,
+		logWriterFn:   logWriterFn,
 	}
 }
 
@@ -69,6 +84,11 @@ func (s *vmStarterService) StartVMWithStartTime(config string, started time.Time
 		vi.Status = status
 		defer s.executionRepo.Delete(vmexec)
 		defer s.infoRepo.Update(&vi)
+		defer func() {
+			if s.logWriterFn != nil {
+				s.logWriterFn(&logs)
+			}
+		}()
 
 		if status == vminfo.Error {
 			fmt.Printf("VM Stopped with error\n%s\n", logs)

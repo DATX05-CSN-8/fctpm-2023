@@ -11,14 +11,14 @@ func JoinPath(paths ...string) string {
 	return strings.Join(paths, string(os.PathSeparator))
 }
 
-func ensureDirectory(path string) error {
+func EnsureDirectory(path string) error {
 	err := os.MkdirAll(path, os.ModePerm)
 	return err
 }
 
 func CreateTempDirWithId(base string, id string) (string, error) {
 	path := JoinPath(base, id)
-	err := ensureDirectory(path)
+	err := EnsureDirectory(path)
 	if err != nil {
 		return "", err
 	}
