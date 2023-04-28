@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/memoverhead"
@@ -27,7 +28,7 @@ func main() {
 	tempPath := flag.String("temp-path", "/tmp/firecracker-memoverhead", "Path to temporary data directory")
 	flag.Parse()
 
-	fcClient := firecracker.NewFirecrackerClient(*fcPath)
+	fcClient := firecracker.NewFirecrackerClientWithTimeout(*fcPath, 1*time.Hour)
 	baseTemplateData := firecracker.SimpleTemplateData{
 		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel",
 		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img",

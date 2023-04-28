@@ -16,9 +16,13 @@ type FirecrackerClient struct {
 }
 
 func NewFirecrackerClient(binaryPath string) *FirecrackerClient {
+	return NewFirecrackerClientWithTimeout(binaryPath, 4*time.Second)
+}
+
+func NewFirecrackerClientWithTimeout(binaryPath string, timeout time.Duration) *FirecrackerClient {
 	return &FirecrackerClient{
 		binaryPath: binaryPath,
-		timeout:    4 * time.Second,
+		timeout:    timeout,
 	}
 }
 
