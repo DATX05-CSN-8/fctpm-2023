@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/pmap"
 )
 
 type memoryOverheadExecutor struct {
@@ -19,6 +21,7 @@ type MemoryOverheadRunner interface {
 
 type instance interface {
 	Processes() map[string]*os.Process
+	Cleanup() error
 }
 
 func NewMemoryOverheadExecutor(runner MemoryOverheadRunner, resultpath *string) (*memoryOverheadExecutor, error) {
@@ -86,10 +89,12 @@ func (e *memoryOverheadExecutor) runMem(size int) (map[string]float64, error) {
 	data := make(map[string]float64)
 	for s, p := range instance.Processes() {
 		data[s] = float64(p.Pid)
-	}
-	fmt.Println("Done sleeping and getting the PID")
+		_, err := pmap.Run(p.Pid)
+		if err != nil {
+			return nil, err
+		}
 
-	// TODO run pmap on the processes
-	// TODO parse pmap results, get RW-data, sum
+		// TODO parse pmap output
+	}
 	return data, nil
 }
