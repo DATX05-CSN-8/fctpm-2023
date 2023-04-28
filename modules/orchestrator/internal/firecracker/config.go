@@ -11,6 +11,8 @@ type SimpleTemplateData struct {
 	KernelImagePath string
 	InitRdPath      string
 	TpmSocket       string
+	MemSize         int
+	BootArgs        string
 }
 
 func NewFirecrackerConfig(templatename string, data any, outpath string) error {

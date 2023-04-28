@@ -1,0 +1,25 @@
+{
+    "boot-source": {
+      "kernel_image_path": "{{.KernelImagePath}}",
+      "boot_args": "{{if .BootArgs}}{{.BootArgs}}{{else}}panic=-1{{end}}",
+      "initrd_path": "{{.InitRdPath}}"
+    },
+    "drives": [],
+    "machine-config": {
+      "vcpu_count": 1,
+      "mem_size_mib": {{if .MemSize}}{{.MemSize}}{{else}}256{{end}},
+      "smt": false,
+      "track_dirty_pages": false
+    },
+    "balloon": null,
+    "network-interfaces": [
+      
+    ],
+    "vsock": null,
+    "logger": null,
+    "metrics": null,
+    "mmds-config": null{{if .TpmSocket}},
+    "tpm": {
+      "socket": "{{.TpmSocket}}"
+    }{{end}}
+}
