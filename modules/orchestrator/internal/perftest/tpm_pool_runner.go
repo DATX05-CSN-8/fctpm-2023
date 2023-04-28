@@ -1,6 +1,7 @@
 package perftest
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
@@ -30,17 +31,20 @@ func NewTpmPoolRunner(
 }
 
 func (r *tpmPoolRunner) RunInstance() error {
-	path, err := dirutil.CreateTempDir(r.config.tempPath)
-	if err != nil {
-		return err
-	}
-	defer dirutil.RemoveTempDir(path)
-	configPath := dirutil.JoinPath(path, r.config.templateName+".json")
-	// copy values of struct
-	templateData := *r.config.templateData
-
 	for i := 0; i < r.instancenum; i++ {
-		time := time.Now()
+		// AAA todo concurrent
+		// AAA todo semaphore? atleast to write to runner
+
+		path, err := dirutil.CreateTempDir(r.config.tempPath)
+		if err != nil {
+			return err
+		}
+		dirutil.JoinPath(path, fmt.Sprint(i))
+		configPath := dirutil.JoinPath(path, r.config.templateName+".json")
+		// copy values of struct
+		templateData := *r.config.templateData
+
+		starttime := time.Now()
 		tpmInstance := r.tpmpoolalloc.tpmq[i]
 
 		templateData.TpmSocket = tpmInstance.instance.SocketPath
@@ -49,12 +53,16 @@ func (r *tpmPoolRunner) RunInstance() error {
 		if err != nil {
 			return err
 		}
-		err = startvmBlocking(r.starter, configPath, time)
+		err = startvmBlocking(r.starter, configPath, starttime)
 		if err != nil {
 			return err
 		}
-		err = r.tpmpoolalloc.tpmq[0].alloc.Return(r.tpmpoolalloc.tpmq[i].instance)
-		//finish(r.inforetriever, &r.config.resultPath)
+		err = r.tpmpoolalloc.tpmq[i].alloc.Return(r.tpmpoolalloc.tpmq[i].instance)
+
+		err = dirutil.RemoveTempDir(path)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -123,8 +123,9 @@ func main() {
 		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
 		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpminst)
 	} else if *rtype == "pool" {
-		templateName := "256-tpm"
+		templateName := "256-tpm" // AAA todo change this?
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
+		fmt.Println(*tempPath)
 		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
 		err = dirutil.EnsureDirectory(tpmPath)
 		if err != nil {
