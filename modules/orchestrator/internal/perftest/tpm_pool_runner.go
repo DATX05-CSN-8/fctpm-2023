@@ -1,7 +1,6 @@
 package perftest
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
@@ -14,20 +13,20 @@ type tpmPoolRunner struct {
 	starter       VmStarter
 	inforetriever *vmdata.VMDataRetriever
 	numtests      int
-	tpmpoolalloc  *TpmPool
+	tpmalloc      tpmallocator
 	numinstance   int
 }
 
 func NewTpmPoolRunner(
 	config *testRunnerConfig, starter VmStarter,
-	inforetriever *vmdata.VMDataRetriever, numtests int, tpmpoolalloc *TpmPool, numinstances int,
+	inforetriever *vmdata.VMDataRetriever, numtests int, tpmalloc tpmallocator, numinstances int,
 ) *tpmPoolRunner {
 	return &tpmPoolRunner{
 		config:        config,
 		starter:       starter,
 		inforetriever: inforetriever,
 		numtests:      numtests,
-		tpmpoolalloc:  tpmpoolalloc,
+		tpmalloc:      tpmalloc,
 		numinstance:   numinstances,
 	}
 }
@@ -41,15 +40,17 @@ func (r *tpmPoolRunner) RunInstance() error {
 		if err != nil {
 			return err
 		}
-		dirutil.JoinPath(path, fmt.Sprint(i))
 		configPath := dirutil.JoinPath(path, r.config.templateName+".json")
 		// copy values of struct
 		templateData := *r.config.templateData
 
 		starttime := time.Now()
-		tpmInstance := r.tpmpoolalloc.tpmq[i]
 
-		templateData.TpmSocket = tpmInstance.instance.SocketPath
+		tpmInstance, err := r.tpmalloc.Allocate()
+		if err != nil {
+			return err
+		}
+		templateData.TpmSocket = tpmInstance.SocketPath
 		// generate config file
 		err = firecracker.NewFirecrackerConfig(r.config.templateName, templateData, path)
 		if err != nil {
@@ -59,8 +60,10 @@ func (r *tpmPoolRunner) RunInstance() error {
 		if err != nil {
 			return err
 		}
-		err = r.tpmpoolalloc.tpmq[i].alloc.Return(r.tpmpoolalloc.tpmq[i].instance)
-
+		err = r.tpmalloc.Return(tpmInstance)
+		if err != nil {
+			return err
+		}
 		err = dirutil.RemoveTempDir(path)
 		if err != nil {
 			return err

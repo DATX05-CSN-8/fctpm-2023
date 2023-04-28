@@ -14,6 +14,7 @@ import (
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmstarter"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpmpool"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -124,7 +125,7 @@ func main() {
 		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
 		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, *tnum, tpminst)
 	} else if *rtype == "pool" {
-		templateName := "256-tpm" // AAA todo change this?
+		templateName := "256-tpm" // AAA TODO change this?
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
 		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
 		err = dirutil.EnsureDirectory(tpmPath)
@@ -133,16 +134,16 @@ func main() {
 			panic(err)
 		}
 
-		// TODO organise handle of input in other way
+		// AAA TODO organise handle of input in other way
 		if *inum < 0 || *inum > 1001 {
 			panic("Invalid number of VM instances: '" + strconv.Itoa(*inum) + "'.")
 		}
-		pool, err := perftest.NewTpmPool(*inum, tpmPath)
+		tpmsinst, err := tpmpool.NewTpmPoolService(tpmPath, *inum)
 		if err != nil {
 			fmt.Println("Could not create temp tpm pool")
 			panic(err)
 		}
-		runner = perftest.NewTpmPoolRunner(runnerCfg, vmstarterService, dataRetrieverService, *tnum, pool, *inum)
+		runner = perftest.NewTpmPoolRunner(runnerCfg, vmstarterService, dataRetrieverService, *tnum, tpmsinst, *inum)
 	} else {
 		panic("Invalid performance test type: '" + *rtype + "'.")
 	}
