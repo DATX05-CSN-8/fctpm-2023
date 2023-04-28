@@ -37,7 +37,7 @@ func NewTestRunnerConfig(templateData *firecracker.SimpleTemplateData, templateN
 	}
 }
 
-func writeDataToCsv(data []vminfo.VMInfo, outpath string) error {
+func writeDataToCsv(data []vminfo.VMInfo, outpath string, numseq int) error {
 	file, err := os.Create(outpath)
 	if err != nil {
 		return err
@@ -50,6 +50,8 @@ func writeDataToCsv(data []vminfo.VMInfo, outpath string) error {
 	if err != nil {
 		return err
 	}
+
+	numpersequence := len(data) / numseq // separate between tests
 	for i, info := range data {
 		row := []string{
 			fmt.Sprint(i),
@@ -61,6 +63,14 @@ func writeDataToCsv(data []vminfo.VMInfo, outpath string) error {
 		if err != nil {
 			return err
 		}
+
+		if (i+1)%numpersequence == 0 {
+			err = writer.Write([]string{})
+			if err != nil {
+				return err
+			}
+		}
 	}
+
 	return nil
 }

@@ -61,7 +61,8 @@ func main() {
 	clean := flag.Bool("clean", false, "Clean the output database and csv")
 	bootLogPath := flag.String("boot-log-path", "", "(optional) path to output boot logs")
 	rtype := flag.String("type", "baseline", "Type of performance test to run. Either 'baseline' or 'tpm'")
-	inum := flag.Int("num", 1, "Number of VM instances to run. Value between '1' and '1000'")
+	inum := flag.Int("instances", 1, "Number of VM instances to run. Value between '1' and '1000'")
+	tnum := flag.Int("tests", 5, "Number of test to run. Value between '1' and '10'")
 	flag.Parse()
 
 	if *clean {
@@ -100,7 +101,7 @@ func main() {
 
 	dataRetrieverService := vmdata.NewVMDataRetriever(vminfoRepo, vmExecRepo)
 
-	perftestExecutor := perftest.NewPerftestExecutor(5, 1)
+	perftestExecutor := perftest.NewPerftestExecutor(*tnum, 1)
 	baseTemplateData := firecracker.SimpleTemplateData{
 		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel",
 		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img",
@@ -110,7 +111,7 @@ func main() {
 	if *rtype == "baseline" {
 		templateName := "256-no-tpm"
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
-		runner = perftest.NewBaselineRunner(runnerCfg, vmstarterService, dataRetrieverService)
+		runner = perftest.NewBaselineRunner(runnerCfg, vmstarterService, dataRetrieverService, *tnum)
 	} else if *rtype == "tpm" {
 		templateName := "256-tpm"
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
@@ -121,11 +122,10 @@ func main() {
 			panic(err)
 		}
 		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
-		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpminst)
+		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, *tnum, tpminst)
 	} else if *rtype == "pool" {
 		templateName := "256-tpm" // AAA todo change this?
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
-		fmt.Println(*tempPath)
 		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
 		err = dirutil.EnsureDirectory(tpmPath)
 		if err != nil {
@@ -142,7 +142,7 @@ func main() {
 			fmt.Println("Could not create temp tpm pool")
 			panic(err)
 		}
-		runner = perftest.NewTpmPoolRunner(runnerCfg, vmstarterService, dataRetrieverService, pool, *inum)
+		runner = perftest.NewTpmPoolRunner(runnerCfg, vmstarterService, dataRetrieverService, *tnum, pool, *inum)
 	} else {
 		panic("Invalid performance test type: '" + *rtype + "'.")
 	}

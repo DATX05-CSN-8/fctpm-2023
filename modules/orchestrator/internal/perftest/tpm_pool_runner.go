@@ -13,25 +13,27 @@ type tpmPoolRunner struct {
 	config        *testRunnerConfig
 	starter       VmStarter
 	inforetriever *vmdata.VMDataRetriever
+	numtests      int
 	tpmpoolalloc  *TpmPool
-	instancenum   int
+	numinstance   int
 }
 
 func NewTpmPoolRunner(
 	config *testRunnerConfig, starter VmStarter,
-	inforetriever *vmdata.VMDataRetriever, tpmpoolalloc *TpmPool, num int,
+	inforetriever *vmdata.VMDataRetriever, numtests int, tpmpoolalloc *TpmPool, numinstances int,
 ) *tpmPoolRunner {
 	return &tpmPoolRunner{
 		config:        config,
 		starter:       starter,
 		inforetriever: inforetriever,
+		numtests:      numtests,
 		tpmpoolalloc:  tpmpoolalloc,
-		instancenum:   num,
+		numinstance:   numinstances,
 	}
 }
 
 func (r *tpmPoolRunner) RunInstance() error {
-	for i := 0; i < r.instancenum; i++ {
+	for i := 0; i < r.numinstance; i++ {
 		// AAA todo concurrent
 		// AAA todo semaphore? atleast to write to runner
 
@@ -68,5 +70,5 @@ func (r *tpmPoolRunner) RunInstance() error {
 }
 
 func (r *tpmPoolRunner) Finish() error {
-	return finish(r.inforetriever, &r.config.resultPath)
+	return finish(r.inforetriever, &r.config.resultPath, r.numtests)
 }

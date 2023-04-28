@@ -8,12 +8,12 @@ import (
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
 )
 
-func finish(inforetriever *vmdata.VMDataRetriever, resultpath *string) error {
+func finish(inforetriever *vmdata.VMDataRetriever, resultpath *string, numseq int) error {
 	data, err := inforetriever.GetAllInfo()
 	if err != nil {
 		return err
 	}
-	return writeDataToCsv(data, *resultpath)
+	return writeDataToCsv(data, *resultpath, numseq)
 }
 
 func startvmBlocking(starter VmStarter, configpath string, time time.Time) error {
