@@ -73,5 +73,6 @@ func (c *FirecrackerClient) Start(configPath string) (*FirecrackerExecution, err
 			outpc <- fmt.Errorf("Timeout while running Firecracker")
 		}
 	}()
-	return newFirecrackerExecution(&sb, outpc), nil
+
+	return newFirecrackerExecution(&sb, outpc, fcCmd.Process), nil
 }

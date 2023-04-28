@@ -2,6 +2,7 @@ package firecracker
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
@@ -13,9 +14,10 @@ type FirecrackerExecution struct {
 	sb          *strings.Builder
 	statusp     *vminfo.Status
 	subscribers *[]StatusCallback
+	process     *os.Process
 }
 
-func newFirecrackerExecution(sb *strings.Builder, outpc chan error) *FirecrackerExecution {
+func newFirecrackerExecution(sb *strings.Builder, outpc chan error, process *os.Process) *FirecrackerExecution {
 	var status vminfo.Status = vminfo.Running
 	subscribers := make([]StatusCallback, 0)
 	go func() {
@@ -34,6 +36,7 @@ func newFirecrackerExecution(sb *strings.Builder, outpc chan error) *Firecracker
 		sb:          sb,
 		statusp:     &status,
 		subscribers: &subscribers,
+		process:     process,
 	}
 }
 
@@ -43,6 +46,10 @@ func (f *FirecrackerExecution) Status() vminfo.Status {
 
 func (f *FirecrackerExecution) Logs() string {
 	return f.sb.String()
+}
+
+func (f *FirecrackerExecution) Process() *os.Process {
+	return f.process
 }
 
 func (f *FirecrackerExecution) Subscribe(cb func(vminfo.Status)) {
