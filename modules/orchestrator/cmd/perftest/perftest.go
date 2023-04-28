@@ -122,14 +122,28 @@ func main() {
 		}
 		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
 		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpminst)
+	} else if *rtype == "pool" {
+		templateName := "256-tpm"
+		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
+		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
+		err = dirutil.EnsureDirectory(tpmPath)
+		if err != nil {
+			fmt.Println("Could not create temp tpm directory")
+			panic(err)
+		}
+
+		// TODO organise handle of input in other way
+		if *inum < 0 || *inum > 1001 {
+			panic("Invalid number of VM instances: '" + strconv.Itoa(*inum) + "'.")
+		}
+		pool, err := perftest.NewTpmPool(*inum, tpmPath)
+		if err != nil {
+			fmt.Println("Could not create temp tpm pool")
+			panic(err)
+		}
+		runner = perftest.NewTpmPoolRunner(runnerCfg, vmstarterService, dataRetrieverService, pool, *inum)
 	} else {
 		panic("Invalid performance test type: '" + *rtype + "'.")
-	}
-
-	if *inum > 0 && *inum < 1001 {
-		perftest.NewTpmPool(resultPath, *inum)
-	} else {
-		panic("Invalid number of VM instances: '" + strconv.Itoa(*inum) + "'.")
 	}
 
 	// execute

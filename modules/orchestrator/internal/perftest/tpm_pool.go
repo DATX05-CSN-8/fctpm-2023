@@ -1,24 +1,35 @@
 package perftest
 
-import (
-	"fmt"
-	"strconv"
-)
+import "github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
 
-type BufferPool struct {
-	newq []string
+type TpmPoolTouplpe struct {
+	alloc    tpmallocator
+	instance *tpminstantiator.TpmInstance
+}
+type TpmPool struct {
+	tpmq []*TpmPoolTouplpe
+	//readyq []tpmallocator
 }
 
-func NewTpmPool(resultpath *string, size int) *BufferPool {
+func NewTpmPool(size int, basepath string) (*TpmPool, error) {
 
-	s := BufferPool{
-		newq: make([]string, size),
+	s := TpmPool{
+		tpmq: make([]*TpmPoolTouplpe, 0),
+		//readyq: make([]tpmallocator, 0),
 	}
 
-	for i := 0; i < len(s.newq); i++ {
-		str := "test buffer " + strconv.Itoa(i+1)
-		s.newq[i] = str
-		fmt.Println(str)
+	for i := 0; i < size; i++ {
+
+		// AAA todo basepath + strconv.Itoa(*inum)
+		tpmalloc := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(basepath)
+
+		tpminstance, err := tpmalloc.Allocate()
+		if err != nil {
+			return nil, err
+		}
+
+		s.tpmq = append(s.tpmq, &TpmPoolTouplpe{alloc: tpmalloc, instance: tpminstance})
 	}
-	return &s
+
+	return &s, nil
 }
