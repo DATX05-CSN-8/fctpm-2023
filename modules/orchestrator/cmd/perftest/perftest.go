@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
@@ -60,6 +61,7 @@ func main() {
 	clean := flag.Bool("clean", false, "Clean the output database and csv")
 	bootLogPath := flag.String("boot-log-path", "", "(optional) path to output boot logs")
 	rtype := flag.String("type", "baseline", "Type of performance test to run. Either 'baseline' or 'tpm'")
+	inum := flag.Int("num", 1, "Number of VM instances to run. Value between '1' and '1000'")
 	flag.Parse()
 
 	if *clean {
@@ -122,6 +124,12 @@ func main() {
 		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpminst)
 	} else {
 		panic("Invalid performance test type: '" + *rtype + "'.")
+	}
+
+	if *inum > 0 && *inum < 1001 {
+		perftest.NewTpmPool(resultPath, *inum)
+	} else {
+		panic("Invalid number of VM instances: '" + strconv.Itoa(*inum) + "'.")
 	}
 
 	// execute
