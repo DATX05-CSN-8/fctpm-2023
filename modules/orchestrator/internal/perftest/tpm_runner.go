@@ -12,19 +12,17 @@ type tpmRunner struct {
 	config        *testRunnerConfig
 	starter       VmStarter
 	inforetriever *vmdata.VMDataRetriever
-	numtests      int
 	tpmalloc      tpmallocator
 }
 
 func NewTpmRunner(
 	config *testRunnerConfig, starter VmStarter,
-	inforetriever *vmdata.VMDataRetriever, numtests int, tpmalloc tpmallocator,
+	inforetriever *vmdata.VMDataRetriever, tpmalloc tpmallocator,
 ) *tpmRunner {
 	return &tpmRunner{
 		config:        config,
 		starter:       starter,
 		inforetriever: inforetriever,
-		numtests:      numtests,
 		tpmalloc:      tpmalloc,
 	}
 }
@@ -55,5 +53,5 @@ func (r *tpmRunner) RunInstance() error {
 }
 
 func (r *tpmRunner) Finish() error {
-	return finish(r.inforetriever, &r.config.resultPath, r.numtests)
+	return finish(r.inforetriever, &r.config.resultPath)
 }

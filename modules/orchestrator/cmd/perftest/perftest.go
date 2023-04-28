@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
@@ -62,8 +61,8 @@ func main() {
 	clean := flag.Bool("clean", false, "Clean the output database and csv")
 	bootLogPath := flag.String("boot-log-path", "", "(optional) path to output boot logs")
 	rtype := flag.String("type", "baseline", "Type of performance test to run. Either 'baseline' or 'tpm'")
-	inum := flag.Int("instances", 1, "Number of VM instances to run. Value between '1' and '1000'")
-	tnum := flag.Int("tests", 5, "Number of test to run. Value between '1' and '10'")
+	totalVms := flag.Int("total-vms", 20, "The total number of VMs to run as part of the perf test scenario.")
+	parallelism := flag.Int("parallelism", 1, "The number of VMs to run in parallel as part of the scenario")
 	flag.Parse()
 
 	if *clean {
@@ -102,7 +101,7 @@ func main() {
 
 	dataRetrieverService := vmdata.NewVMDataRetriever(vminfoRepo, vmExecRepo)
 
-	perftestExecutor := perftest.NewPerftestExecutor(*tnum, 1)
+	perftestExecutor := perftest.NewPerftestExecutor(*totalVms, *parallelism)
 	baseTemplateData := firecracker.SimpleTemplateData{
 		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel",
 		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img",
@@ -112,7 +111,7 @@ func main() {
 	if *rtype == "baseline" {
 		templateName := "256-no-tpm"
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
-		runner = perftest.NewBaselineRunner(runnerCfg, vmstarterService, dataRetrieverService, *tnum)
+		runner = perftest.NewBaselineRunner(runnerCfg, vmstarterService, dataRetrieverService)
 	} else if *rtype == "tpm" {
 		templateName := "256-tpm"
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
@@ -123,7 +122,7 @@ func main() {
 			panic(err)
 		}
 		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
-		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, *tnum, tpminst)
+		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpminst)
 	} else if *rtype == "pool" {
 		templateName := "256-tpm" // AAA TODO change this?
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
@@ -134,16 +133,12 @@ func main() {
 			panic(err)
 		}
 
-		// AAA TODO organise handle of input in other way
-		if *inum < 0 || *inum > 1001 {
-			panic("Invalid number of VM instances: '" + strconv.Itoa(*inum) + "'.")
-		}
-		tpmsinst, err := tpmpool.NewTpmPoolService(tpmPath, *inum)
+		tpmsinst, err := tpmpool.NewTpmPoolService(tpmPath, *totalVms)
 		if err != nil {
 			fmt.Println("Could not create temp tpm pool")
 			panic(err)
 		}
-		runner = perftest.NewTpmPoolRunner(runnerCfg, vmstarterService, dataRetrieverService, *tnum, tpmsinst, *inum)
+		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpmsinst)
 	} else {
 		panic("Invalid performance test type: '" + *rtype + "'.")
 	}

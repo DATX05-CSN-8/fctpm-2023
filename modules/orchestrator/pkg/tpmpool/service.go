@@ -2,7 +2,6 @@ package tpmpool
 
 import (
 	"errors"
-	"sync"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
 )
@@ -16,7 +15,7 @@ type tpmPoolService struct {
 	alloc  tpmallocator
 	readyq []*tpminstantiator.TpmInstance
 	//busyq  []*tpminstantiator.TpmInstance
-	mu sync.Mutex
+	mu chan int
 }
 
 func NewTpmPoolService(basepath string, size int) (*tpmPoolService, error) {
@@ -24,11 +23,10 @@ func NewTpmPoolService(basepath string, size int) (*tpmPoolService, error) {
 		readyq: make([]*tpminstantiator.TpmInstance, 0),
 		alloc:  tpminstantiator.NewTpmInstantiatorServiceWithBasePath(basepath),
 		//busyq:  make([]*tpminstantiator.TpmInstance, 0),
-		mu: sync.Mutex{},
+		mu: make(chan int, 1),
 	}
-
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mu <- 1
+	defer func() { <-t.mu }()
 	for i := 0; i < size; i++ {
 		tpminstance, err := t.alloc.Allocate()
 		if err != nil {
@@ -40,8 +38,8 @@ func NewTpmPoolService(basepath string, size int) (*tpmPoolService, error) {
 }
 
 func (s *tpmPoolService) Allocate() (*tpminstantiator.TpmInstance, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu <- 1
+	defer func() { <-s.mu }()
 	if len(s.readyq) < 0 {
 		return nil, errors.New("Error occurred, no more elements in readyq")
 	}

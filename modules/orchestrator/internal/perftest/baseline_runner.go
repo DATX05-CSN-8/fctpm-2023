@@ -12,15 +12,13 @@ type baselineRunner struct {
 	config        *testRunnerConfig
 	starter       VmStarter
 	inforetriever *vmdata.VMDataRetriever
-	numtests      int
 }
 
-func NewBaselineRunner(config *testRunnerConfig, starter VmStarter, infoRetriever *vmdata.VMDataRetriever, numtests int) *baselineRunner {
+func NewBaselineRunner(config *testRunnerConfig, starter VmStarter, infoRetriever *vmdata.VMDataRetriever) *baselineRunner {
 	return &baselineRunner{
 		config:        config,
 		starter:       starter,
 		inforetriever: infoRetriever,
-		numtests:      numtests,
 	}
 }
 
@@ -42,5 +40,5 @@ func (br *baselineRunner) RunInstance() error {
 }
 
 func (br *baselineRunner) Finish() error {
-	return finish(br.inforetriever, &br.config.resultPath, br.numtests)
+	return finish(br.inforetriever, &br.config.resultPath)
 }
