@@ -13,6 +13,7 @@ import (
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmstarter"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpmpool"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -124,6 +125,21 @@ func main() {
 		}
 		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
 		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpminst)
+	} else if *rtype == "pool" {
+		templateName := "256-tpm"
+		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
+		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
+		err = dirutil.EnsureDirectory(tpmPath)
+		if err != nil {
+			fmt.Println("Could not create temp tpm directory")
+			panic(err)
+		}
+		tpmsinst, err := tpmpool.NewTpmPoolService(tpmPath, *totalVms)
+		if err != nil {
+			fmt.Println("Could not create temp tpm pool")
+			panic(err)
+		}
+		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpmsinst)
 	} else {
 		panic("Invalid performance test type: '" + *rtype + "'.")
 	}
