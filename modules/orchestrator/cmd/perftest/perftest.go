@@ -13,6 +13,7 @@ import (
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmstarter"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpmpool"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -62,6 +63,8 @@ func main() {
 	rtype := flag.String("type", "baseline", "Type of performance test to run. Either 'baseline' or 'tpm'")
 	totalVms := flag.Int("total-vms", 20, "The total number of VMs to run as part of the perf test scenario.")
 	parallelism := flag.Int("parallelism", 1, "The number of VMs to run in parallel as part of the scenario")
+	kernelPath := flag.String("kernel-path", "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel", "Path to Firecracker kernel")
+	initPath := flag.String("init-path", "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img", "Path to Firecracker init")
 	flag.Parse()
 
 	if *clean {
@@ -102,8 +105,8 @@ func main() {
 
 	perftestExecutor := perftest.NewPerftestExecutor(*totalVms, *parallelism)
 	baseTemplateData := firecracker.SimpleTemplateData{
-		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel",
-		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img",
+		KernelImagePath: *kernelPath,
+		InitRdPath:      *initPath,
 	}
 
 	var runner perftest.PerftestRunner
@@ -122,6 +125,21 @@ func main() {
 		}
 		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
 		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpminst)
+	} else if *rtype == "pool" {
+		templateName := "256-tpm"
+		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
+		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
+		err = dirutil.EnsureDirectory(tpmPath)
+		if err != nil {
+			fmt.Println("Could not create temp tpm directory")
+			panic(err)
+		}
+		tpmsinst, err := tpmpool.NewTpmPoolService(tpmPath, *totalVms)
+		if err != nil {
+			fmt.Println("Could not create temp tpm pool")
+			panic(err)
+		}
+		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpmsinst)
 	} else {
 		panic("Invalid performance test type: '" + *rtype + "'.")
 	}
