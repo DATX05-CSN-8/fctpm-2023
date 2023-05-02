@@ -39,8 +39,8 @@ func main() {
 
 	// create firecracker config
 	data := firecracker.SimpleTemplateData{
-		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel",
-		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img",
+		KernelImagePath: "/home/alex/fctpm-2023/vm-image/out/fc-image-kernel",
+		InitRdPath:      "/home/alex/fctpm-2023/vm-image/out/fc-image-initrd.img",
 		TpmSocket:       instance.SocketPath,
 	}
 	err = firecracker.NewFirecrackerConfig("simple", data, fcTmplPath)
