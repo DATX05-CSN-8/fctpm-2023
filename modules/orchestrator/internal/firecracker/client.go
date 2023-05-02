@@ -3,7 +3,6 @@ package firecracker
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,7 +20,12 @@ func NewFirecrackerClient(binaryPath string) *FirecrackerClient {
 		timeout:    4 * time.Second,
 	}
 }
-
+func handlePanic() {
+	e := recover()
+	if e != nil {
+		fmt.Println("Recovery from client panic: ", e)
+	}
+}
 func (c *FirecrackerClient) Start(configPath string) (*FirecrackerExecution, error) {
 	_, err := os.Stat(configPath)
 	if os.IsNotExist(err) {
@@ -40,6 +44,7 @@ func (c *FirecrackerClient) Start(configPath string) (*FirecrackerExecution, err
 		return nil, err
 	}
 	go func() {
+		defer handlePanic()
 		b := make([]byte, 8)
 		for {
 			c, e := out.Read(b)
@@ -53,8 +58,7 @@ func (c *FirecrackerClient) Start(configPath string) (*FirecrackerExecution, err
 				return
 			}
 			if e != nil {
-				fmt.Println("Error reading logs")
-				log.Fatal(e)
+				panic("Error reading logs")
 			}
 		}
 	}()
