@@ -62,6 +62,8 @@ func main() {
 	rtype := flag.String("type", "baseline", "Type of performance test to run. Either 'baseline' or 'tpm'")
 	totalVms := flag.Int("total-vms", 20, "The total number of VMs to run as part of the perf test scenario.")
 	parallelism := flag.Int("parallelism", 1, "The number of VMs to run in parallel as part of the scenario")
+	kernelPath := flag.String("kernel-path", "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel", "Path to Firecracker kernel")
+	initPath := flag.String("init-path", "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img", "Path to Firecracker init")
 	flag.Parse()
 
 	if *clean {
@@ -102,8 +104,8 @@ func main() {
 
 	perftestExecutor := perftest.NewPerftestExecutor(*totalVms, *parallelism)
 	baseTemplateData := firecracker.SimpleTemplateData{
-		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel",
-		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img",
+		KernelImagePath: *kernelPath,
+		InitRdPath:      *initPath,
 	}
 
 	var runner perftest.PerftestRunner
