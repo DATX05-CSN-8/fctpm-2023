@@ -126,7 +126,7 @@ func main() {
 		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
 		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpminst)
 	} else if *rtype == "pool" {
-		templateName := "256-tpm" // AAA TODO change this?
+		templateName := "256-tpm"
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
 		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
 		err = dirutil.EnsureDirectory(tpmPath)
@@ -134,7 +134,6 @@ func main() {
 			fmt.Println("Could not create temp tpm directory")
 			panic(err)
 		}
-
 		tpmsinst, err := tpmpool.NewTpmPoolService(tpmPath, *totalVms)
 		if err != nil {
 			fmt.Println("Could not create temp tpm pool")

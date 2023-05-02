@@ -14,16 +14,14 @@ type tpmallocator interface {
 type tpmPoolService struct {
 	alloc  tpmallocator
 	readyq []*tpminstantiator.TpmInstance
-	//busyq  []*tpminstantiator.TpmInstance
-	mu chan int
+	mu     chan int
 }
 
 func NewTpmPoolService(basepath string, size int) (*tpmPoolService, error) {
 	t := tpmPoolService{
 		readyq: make([]*tpminstantiator.TpmInstance, 0),
 		alloc:  tpminstantiator.NewTpmInstantiatorServiceWithBasePath(basepath),
-		//busyq:  make([]*tpminstantiator.TpmInstance, 0),
-		mu: make(chan int, 1),
+		mu:     make(chan int, 1),
 	}
 	t.mu <- 1
 	defer func() { <-t.mu }()
@@ -41,16 +39,14 @@ func (s *tpmPoolService) Allocate() (*tpminstantiator.TpmInstance, error) {
 	s.mu <- 1
 	defer func() { <-s.mu }()
 	if len(s.readyq) < 0 {
-		return nil, errors.New("Error occurred, no more elements in readyq")
+		return nil, errors.New("Error occurred, no more elements in tpm pool ready queue")
 	}
 	tpminstance := s.readyq[0]
 	s.readyq = s.readyq[1:]
-	//s.busyq = append(s.busyq, tpminstance)
 	return tpminstance, nil
 }
 
 func (s *tpmPoolService) Return(instance *tpminstantiator.TpmInstance) error {
-	//s.busyq = pop_spec_(s.busyq, tpminstance)
 	err := s.alloc.Return(instance)
 	if err != nil {
 		return err
