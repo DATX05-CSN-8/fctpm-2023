@@ -2,6 +2,7 @@ DIRS = boottime-init shell-init kernel
 ORG ?= $(USER)
 LOOP ?= /dev/loop0
 IMG_NAME ?= fc-image
+OUTP_IMAGE ?= fc-image
 INIT_NAME ?= boottime-init
 
 clean: 
@@ -24,8 +25,8 @@ out/build-pkg: out
 img/$(IMG_NAME).yml: out/build-pkg
 	KERNEL_IMAGE=$$(cat kernel/PKG_TAG) INIT_IMAGE=$$(cat $(INIT_NAME)/PKG_TAG) envsubst < img/$(IMG_NAME).yml.tmpl > img/$(IMG_NAME).yml
 
-out/fc-image-kernel: img/$(IMG_NAME).yml
-	linuxkit build --format kernel+initrd --decompress-kernel -dir out img/$(IMG_NAME).yml
+out/$(OUTP_IMAGE)-kernel: img/$(IMG_NAME).yml
+	linuxkit build --format kernel+initrd --decompress-kernel -dir out -name $(OUTP_IMAGE) img/$(IMG_NAME).yml
 
 out/fc-disk.img: out/fc-image-kernel
 	linuxkit build --format tar img/$(IMG_NAME).yml && \
