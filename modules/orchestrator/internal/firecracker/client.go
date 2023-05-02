@@ -16,9 +16,13 @@ type FirecrackerClient struct {
 }
 
 func NewFirecrackerClient(binaryPath string) *FirecrackerClient {
+	return NewFirecrackerClientWithTimeout(binaryPath, 4*time.Second)
+}
+
+func NewFirecrackerClientWithTimeout(binaryPath string, timeout time.Duration) *FirecrackerClient {
 	return &FirecrackerClient{
 		binaryPath: binaryPath,
-		timeout:    4 * time.Second,
+		timeout:    timeout,
 	}
 }
 
@@ -73,5 +77,6 @@ func (c *FirecrackerClient) Start(configPath string) (*FirecrackerExecution, err
 			outpc <- fmt.Errorf("Timeout while running Firecracker")
 		}
 	}()
-	return newFirecrackerExecution(&sb, outpc), nil
+
+	return newFirecrackerExecution(&sb, outpc, fcCmd.Process), nil
 }

@@ -1,0 +1,11 @@
+49717:   -bash
+Address           Kbytes     RSS   Dirty Mode  Mapping
+000055ea3ccda000     184     184       0 r---- bash
+000055ea3cd08000     748     744       0 r-x-- bash
+000055ea3cdc3000     224     112       0 r---- bash
+000055ea3cdfc000      12      12      12 r---- bash
+000055ea3cdff000      36      36      36 rw--- bash
+000055ea3ce08000      44      32      32 rw---   [ anon ]
+000055ea3d3a8000    2644    2608    2608 rw---   [ anon ]
+---------------- ------- ------- -------
+total kB            9784    6624    2876
