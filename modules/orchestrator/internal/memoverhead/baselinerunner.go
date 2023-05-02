@@ -21,12 +21,6 @@ type baselineInstance struct {
 	path      string
 }
 
-type memTemplateData struct {
-	KernelImagePath string
-	InitRdPath      string
-	MemSize         int
-}
-
 func NewBaselineRunner(fc *firecracker.FirecrackerClient, config *testRunnerConfig) (MemoverheadBaselineRunner, error) {
 	return MemoverheadBaselineRunner{
 		fcclient: fc,

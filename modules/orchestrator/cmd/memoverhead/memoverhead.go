@@ -6,8 +6,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/memoverhead"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
 )
 
 func genDefaultFCBinPath() string {
@@ -46,11 +48,24 @@ func main() {
 		BootArgs:        "panic=-1",
 	}
 
+	templateName := "default"
+	cfg := memoverhead.NewMemoryOverheadConfig(&baseTemplateData, templateName, *tempPath)
 	var runner memoverhead.MemoryOverheadRunner
 	if *rtype == "baseline" {
-		templateName := "default"
-		cfg := memoverhead.NewMemoryOverheadConfig(&baseTemplateData, templateName, *tempPath)
 		r, err := memoverhead.NewBaselineRunner(fcClient, cfg)
+		if err != nil {
+			panic(err)
+		}
+		runner = &r
+	} else if *rtype == "tpm" {
+		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
+		err := dirutil.EnsureDirectory(tpmPath)
+		if err != nil {
+			fmt.Println("Could not create temp tpm directory")
+			panic(err)
+		}
+		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
+		r, err := memoverhead.NewTpmRunner(fcClient, cfg, tpminst)
 		if err != nil {
 			panic(err)
 		}

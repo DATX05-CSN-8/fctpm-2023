@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/pmap"
@@ -47,6 +48,7 @@ func (e *memoryOverheadExecutor) RunWithMems(sizes []int) error {
 	for k := range data[0] {
 		keys = append(keys, k)
 	}
+	sort.Strings(keys)
 
 	file, err := os.Create(*e.resultpath)
 	if err != nil {

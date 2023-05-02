@@ -117,3 +117,7 @@ func (s *tpmInstantiatorService) Destroy(instance *TpmInstance) error {
 	}
 	return nil
 }
+
+func (i *TpmInstance) Process() *os.Process {
+	return i.proc
+}

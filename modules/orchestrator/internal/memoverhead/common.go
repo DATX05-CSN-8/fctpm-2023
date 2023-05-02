@@ -8,6 +8,12 @@ type testRunnerConfig struct {
 	tempPath     string
 }
 
+type memTemplateData struct {
+	KernelImagePath string
+	InitRdPath      string
+	MemSize         int
+}
+
 func NewMemoryOverheadConfig(templatedata *firecracker.SimpleTemplateData, templateName string, tempPath string) *testRunnerConfig {
 	return &testRunnerConfig{
 		templateData: templatedata,
