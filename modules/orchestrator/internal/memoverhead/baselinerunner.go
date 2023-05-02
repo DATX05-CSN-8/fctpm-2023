@@ -3,6 +3,8 @@ package memoverhead
 import (
 	"fmt"
 	"os"
+	"strings"
+	"syscall"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
@@ -54,7 +56,10 @@ func (r *MemoverheadBaselineRunner) Run(memsize int) (instance, error) {
 		return nil, err
 	}
 	execution.Subscribe(func(status vminfo.Status) {
-		fmt.Printf("Logs received on exit\n%s\n", execution.Logs())
+		badExit := !strings.HasSuffix(execution.Logs(), "Error occurred: signal: interrupt")
+		if status != vminfo.Stopped && badExit {
+			fmt.Printf("Logs received on error exit\n%s\n", execution.Logs())
+		}
 		dirutil.RemoveTempDir(path)
 	})
 	if execution.Status() == vminfo.Error {
@@ -70,7 +75,7 @@ func (r *MemoverheadBaselineRunner) Run(memsize int) (instance, error) {
 
 func (r *MemoverheadBaselineRunner) Stop(inst instance) error {
 	processes := inst.Processes()
-	err := processes["firecracker"].Kill()
+	err := processes["firecracker"].Signal(syscall.SIGINT)
 	defer inst.Cleanup()
 	return err
 }

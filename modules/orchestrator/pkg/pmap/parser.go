@@ -68,3 +68,11 @@ func parseMode(modeStr *string) (int, error) {
 	}
 	return mode, nil
 }
+
+func (r *ParsedRow) Kbytes() int {
+	return r.kbytes
+}
+
+func (r *ParsedRow) Writeable() bool {
+	return (r.mode & 1 << MODE_WRITE) > 0
+}

@@ -26,18 +26,25 @@ func main() {
 	rtype := flag.String("type", "baseline", "Type of performance test to run. Either 'baseline' or 'tpm'")
 	resultPath := flag.String("result-path", "output.csv", "Path to CSV file to create")
 	tempPath := flag.String("temp-path", "/tmp/firecracker-memoverhead", "Path to temporary data directory")
+	kernel := flag.String("kernel", "NONE", "Path to kernel to run")
+	initrd := flag.String("init-rd", "NONE", "Path to init rd to run")
 	flag.Parse()
+
+	if *kernel == "NONE" {
+		panic("You need to specify the kernel command line argument")
+	}
+	if *initrd == "NONE" {
+		panic("You need to specify the init-rd command line argument")
+	}
 
 	fcClient := firecracker.NewFirecrackerClientWithTimeout(*fcPath, 1*time.Hour)
 	baseTemplateData := firecracker.SimpleTemplateData{
-		KernelImagePath: "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel",
-		InitRdPath:      "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img",
+		KernelImagePath: *kernel,
+		InitRdPath:      *initrd,
 		MemSize:         128,
 		TpmSocket:       "",
-		BootArgs:        "",
+		BootArgs:        "panic=-1",
 	}
-
-	fmt.Println("Successfully parsed input")
 
 	var runner memoverhead.MemoryOverheadRunner
 	if *rtype == "baseline" {
@@ -61,5 +68,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println("Sleeping to finish all processes")
+	<-time.After(5 * time.Second)
 
 }

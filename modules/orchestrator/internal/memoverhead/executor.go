@@ -63,7 +63,7 @@ func (e *memoryOverheadExecutor) RunWithMems(sizes []int) error {
 	}
 	for i, d := range data {
 		var towrite []string
-		towrite = append(towrite, fmt.Sprintf("%d", sizes[i]))
+		towrite = append(towrite, fmt.Sprintf("%d", sizes[i]*1024))
 		sum := 0.0
 		for _, key := range keys {
 			val := fmt.Sprintf("%.0f", d[key])
@@ -88,13 +88,26 @@ func (e *memoryOverheadExecutor) runMem(size int) (map[string]float64, error) {
 	<-time.After(2 * time.Second)
 	data := make(map[string]float64)
 	for s, p := range instance.Processes() {
-		data[s] = float64(p.Pid)
-		_, err := pmap.Run(p.Pid)
+		outp, err := pmap.Run(p.Pid)
 		if err != nil {
 			return nil, err
 		}
-
-		// TODO parse pmap output
+		parsed, err := pmap.ParseOutput(outp)
+		if err != nil {
+			return nil, err
+		}
+		data[s] = sumWritablePmapOutput(parsed)
 	}
 	return data, nil
+}
+
+func sumWritablePmapOutput(outp *pmap.Parsed) float64 {
+	var out float64 = 0
+	for _, r := range *outp {
+		if !r.Writeable() {
+			continue
+		}
+		out += float64(r.Kbytes())
+	}
+	return out
 }
