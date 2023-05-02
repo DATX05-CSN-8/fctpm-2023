@@ -1,8 +1,8 @@
-DIRS = init simple_init kernel
+DIRS = boottime-init shell-init kernel
 ORG ?= $(USER)
 LOOP ?= /dev/loop0
-IMG_NAME = fc-image
-INIT_NAME ?= init
+IMG_NAME ?= fc-image
+INIT_NAME ?= boottime-init
 
 clean: 
 	rm -rf out \
