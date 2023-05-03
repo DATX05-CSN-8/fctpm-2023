@@ -4,14 +4,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type Repository interface {
-	FindAll() ([]VMInfo, error)
-	FindById(id string) (VMInfo, error)
-	Create(data VMInfo) (VMInfo, error)
-	Update(data VMInfo) (VMInfo, error)
-	Delete(data VMInfo) error
-}
-
 type repository struct {
 	db *gorm.DB
 }

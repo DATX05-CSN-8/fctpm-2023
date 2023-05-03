@@ -110,12 +110,11 @@ func main() {
 	}
 
 	var runner perftest.PerftestRunner
+	templateName := "default"
 	if *rtype == "baseline" {
-		templateName := "256-no-tpm"
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
 		runner = perftest.NewBaselineRunner(runnerCfg, vmstarterService, dataRetrieverService)
 	} else if *rtype == "tpm" {
-		templateName := "256-tpm"
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
 		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
 		err = dirutil.EnsureDirectory(tpmPath)
@@ -126,7 +125,6 @@ func main() {
 		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
 		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpminst)
 	} else if *rtype == "pool" {
-		templateName := "256-tpm"
 		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
 		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
 		err = dirutil.EnsureDirectory(tpmPath)
