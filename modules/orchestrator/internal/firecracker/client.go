@@ -3,7 +3,6 @@ package firecracker
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -43,31 +42,29 @@ func (c *FirecrackerClient) Start(configPath string) (*FirecrackerExecution, err
 	if err != nil {
 		return nil, err
 	}
-	go func() {
-		b := make([]byte, 8)
-		for {
-			c, e := out.Read(b)
-
-			if c < 0 {
-				panic("Negative read")
-			}
-			sb.Write(b[:c])
-
-			if e == io.EOF {
-				return
-			}
-			if e != nil {
-				fmt.Println("Error reading logs")
-				log.Fatal(e)
-			}
-		}
-	}()
 
 	outpc := make(chan error, 1)
 	go func() {
 
 		waitc := make(chan error, 1)
 		go func() {
+			b := make([]byte, 8)
+			for {
+				c, e := out.Read(b)
+
+				if c < 0 {
+					panic("Negative read")
+				}
+				sb.Write(b[:c])
+
+				if e == io.EOF {
+					break
+				}
+				if e != nil {
+					fmt.Println("Error reading logs", e)
+					break
+				}
+			}
 			waitc <- fcCmd.Wait()
 		}()
 		select {
