@@ -2,14 +2,6 @@ package vmexecution
 
 import "fmt"
 
-type Repository interface {
-	FindAll() ([]VMExecution, error)
-	FindById(id string) (VMExecution, error)
-	Create(data VMExecution) (VMExecution, error)
-	Update(data VMExecution) (VMExecution, error)
-	Delete(data VMExecution) error
-}
-
 type repository struct {
 	data map[string]VMExecution
 }
