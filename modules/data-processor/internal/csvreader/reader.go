@@ -6,7 +6,9 @@ import (
 	"os"
 )
 
-func ReadCsvFile[R any](path string, rowparser func([]string) (*R, error)) ([]*R, error) {
+type RowParser[R any] func([]string) (*R, error)
+
+func ReadCsvFile[R any](path string, rowparser RowParser[R]) ([]*R, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
