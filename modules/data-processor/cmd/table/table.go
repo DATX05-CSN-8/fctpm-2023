@@ -17,7 +17,7 @@ func main() {
 	flag.Parse()
 
 	tabledata := make([][]string, 1)
-	tabledata[0] = []string{"", "Min", "Max", "Average", "p95", "Standard Deviation"}
+	tabledata[0] = []string{"Type", "Min", "Max", "Average", "p95", "Standard Deviation"}
 	for _, d := range inputDatas {
 		parsed, err := csvreader.ReadCsvFile(d.File, csvreader.OutputDataRowParser)
 		if err != nil {
