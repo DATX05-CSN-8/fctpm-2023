@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/dirutil"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/firecracker"
@@ -14,8 +15,6 @@ import (
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmstarter"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpmpool"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 func genDefaultFCBinPath() string {
@@ -53,8 +52,6 @@ func getLogWriterFn(logPath *string) (func(*string), error) {
 }
 
 func main() {
-
-	dbPath := flag.String("db-path", "test.db", "File path to the db file to be used for sqlite")
 	fcPath := flag.String("firecracker-bin", genDefaultFCBinPath(), "File path to the firecracker binary that should be used")
 	resultPath := flag.String("result-path", "output.csv", "Path to CSV file to create")
 	tempPath := flag.String("temp-path", "/tmp/firecracker-perftest", "Path to temporary data directory")
@@ -66,13 +63,8 @@ func main() {
 	kernelPath := flag.String("kernel-path", "/home/melker/fctpm-2023/vm-image/out/fc-image-kernel", "Path to Firecracker kernel")
 	initPath := flag.String("init-path", "/home/melker/fctpm-2023/vm-image/out/fc-image-initrd.img", "Path to Firecracker init")
 	flag.Parse()
-
+	var err error
 	if *clean {
-		err := dirutil.RemoveFileIfExists(*dbPath)
-		if err != nil {
-			fmt.Println("Error occurred removing db")
-			panic(err)
-		}
 		err = dirutil.RemoveFileIfExists(*resultPath)
 		if err != nil {
 			fmt.Println("Error occurred removing result file")
@@ -80,15 +72,9 @@ func main() {
 		}
 	}
 
-	db, err := gorm.Open(sqlite.Open(*dbPath), &gorm.Config{})
-	if err != nil {
-		panic("Failed to connect to db")
-	}
-	db.AutoMigrate(&vminfo.VMInfo{})
-
 	fcClient := firecracker.NewFirecrackerClient(*fcPath)
-	vminfoRepo := vminfo.NewRepository(db)
-	vmExecRepo := vmexecution.NewRepository()
+	vminfoRepo := vminfo.NewMapRepository()
+	vmExecRepo := vmexecution.NewMapRepository()
 	var vmstarterService perftest.VmStarter
 	if *bootLogPath != "" {
 		logWriterFn, err := getLogWriterFn(bootLogPath)
@@ -149,5 +135,8 @@ func main() {
 		fmt.Println("Error occurred running perftest")
 		panic(err)
 	}
+	fmt.Println("Stopping perf test execution")
+
+	<-time.After(10 * time.Second)
 
 }
