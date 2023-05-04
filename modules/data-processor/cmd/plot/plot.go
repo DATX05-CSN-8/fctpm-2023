@@ -25,8 +25,14 @@ func main() {
 	var min float64 = 9 * 10_000
 	var max float64 = 0
 	extraSize := 10
+	dashstyles := [][]vg.Length{{}, {vg.Points(7), vg.Points(2)}, {vg.Points(2)}}
+	colors := []color.Color{
+		color.RGBA{R: 47, G: 134, B: 142, A: 255},
+		color.RGBA{R: 95, G: 134, B: 45, A: 255},
+		color.RGBA{R: 157, G: 63, B: 52, A: 255},
+	}
 
-	for _, d := range inputDatas {
+	for i, d := range inputDatas {
 		parsed, err := csvreader.ReadCsvFile(d.File, csvreader.OutputDataRowParser)
 		if err != nil {
 			panic(err)
@@ -51,24 +57,24 @@ func main() {
 		if last > max {
 			max = last
 		}
-		fn.Color = color.YCbCr{
-			Y:  127,
-			Cb: uint8(rand.Int()),
-			Cr: uint8(rand.Int()),
-		}
+		fn.LineStyle.Dashes = dashstyles[i%len(dashstyles)]
+		fn.LineStyle.Width = vg.Points(2)
+		fn.Color = colors[i%len(colors)]
 		p.Add(fn)
 		p.Legend.Add(d.Name, fn)
 		fn.XMin = deltas[0]
 		fn.XMax = last
 	}
 	grid := plotter.NewGrid()
+	grid.Vertical.Color = color.RGBA{R: 0, G: 0, B: 0, A: 35}
+	grid.Horizontal.Color = grid.Vertical.Color
 	p.Add(grid)
-	p.X.Tick.Marker = MyTicker{width: 5, labelwidth: 20, labelfmt: "%.f"}
+	p.X.Tick.Marker = MyTicker{width: 10, labelwidth: 100, labelfmt: "%.f"}
 	p.Y.Tick.Marker = MyTicker{width: 0.05, labelwidth: 0.2, labelfmt: "%.1f"}
 	p.X.Min = min - float64(extraSize)
 	p.X.Max = max + float64(extraSize)
 	p.Y.Min = 0
-	p.Y.Max = 1
+	p.Y.Max = 1.1
 
 	err := p.Save(4*vg.Inch, 4*vg.Inch, "out."+*outputtype)
 	if err != nil {
