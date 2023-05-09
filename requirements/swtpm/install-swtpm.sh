@@ -9,6 +9,7 @@ curl -sSL -O https://github.com/stefanberger/swtpm/archive/refs/tags/v0.8.0.tar.
 tar xzf v0.8.0.tar.gz
 rm -rf v0.8.0.tar.gz
 cd swtpm-0.8.0
+./autogen.sh --with-gnutls --prefix=/usr
 make -j4
 make -j4 check
 sudo make install

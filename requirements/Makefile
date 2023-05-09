@@ -1,3 +1,3 @@
 default: 
-	./swtpm/install.sh
-	./linuxkit/install.sh
+	cd swtpm && ./install-swtpm.sh
+	cd linuxkit && ./install.sh
