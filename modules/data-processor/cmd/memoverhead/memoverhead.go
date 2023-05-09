@@ -40,7 +40,7 @@ func main() {
 		panic(err)
 	}
 
-	plotutil.AddLinePoints(p, "baseline", toXys(baseline), "Modified without swtpm", toXys(noSwtpm), "Modified with swtpm", toXys(wstpm))
+	plotutil.AddLinePoints(p, "Unmodified", toXys(baseline), "Modified excl. swtpm", toXys(noSwtpm), "Modified incl. swtpm", toXys(wstpm))
 	grid := plotter.NewGrid()
 	grid.Vertical.Color = color.RGBA{R: 0, G: 0, B: 0, A: 35}
 	grid.Horizontal.Color = grid.Vertical.Color
