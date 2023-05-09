@@ -1,0 +1,2209 @@
+From 30cccf301d392eaa47d02d5edd9def6ba03a4f54 Mon Sep 17 00:00:00 2001
+From: vltmn <melkerveltman@gmail.com>
+Date: Fri, 5 May 2023 15:03:12 +0200
+Subject: [PATCH] Add TPM support truncated
+
+---
+ Cargo.lock                                    |  19 +-
+ .../seccomp/x86_64-unknown-linux-musl.json    |   4 +
+ src/api_server/src/parsed_request.rs          |   2 +
+ src/api_server/src/request/mod.rs             |   1 +
+ src/api_server/src/request/tpm.rs             |  17 +
+ src/api_server/swagger/firecracker.yaml       |  38 ++
+ src/arch/src/lib.rs                           |   2 +
+ src/devices/Cargo.toml                        |   2 +
+ src/devices/src/virtio/mod.rs                 |   3 +
+ src/devices/src/virtio/queue.rs               |   1 +
+ src/devices/src/virtio/tpm/device.rs          | 273 +++++++++++
+ src/devices/src/virtio/tpm/emulator.rs        |  24 +
+ src/devices/src/virtio/tpm/event_handler.rs   |  68 +++
+ src/devices/src/virtio/tpm/mod.rs             |  39 ++
+ src/firecracker/Cargo.toml                    |   1 +
+ src/logger/src/metrics.rs                     |   4 +
+ src/tpm/Cargo.toml                            |  13 +
+ src/tpm/src/emulator.rs                       | 443 +++++++++++++++++
+ src/tpm/src/lib.rs                            | 446 ++++++++++++++++++
+ src/tpm/src/socket.rs                         | 128 +++++
+ src/vmm/Cargo.toml                            |   1 +
+ src/vmm/src/builder.rs                        |  13 +
+ src/vmm/src/device_manager/mmio.rs            |  12 +-
+ src/vmm/src/resources.rs                      |  39 +-
+ src/vmm/src/rpc_interface.rs                  |  25 +
+ src/vmm/src/vmm_config/mod.rs                 |   2 +
+ src/vmm/src/vmm_config/tpm.rs                 |  69 +++
+ 27 files changed, 1673 insertions(+), 16 deletions(-)
+ create mode 100644 src/api_server/src/request/tpm.rs
+ create mode 100644 src/devices/src/virtio/tpm/device.rs
+ create mode 100644 src/devices/src/virtio/tpm/emulator.rs
+ create mode 100644 src/devices/src/virtio/tpm/event_handler.rs
+ create mode 100644 src/devices/src/virtio/tpm/mod.rs
+ create mode 100644 src/tpm/Cargo.toml
+ create mode 100644 src/tpm/src/emulator.rs
+ create mode 100644 src/tpm/src/lib.rs
+ create mode 100644 src/tpm/src/socket.rs
+ create mode 100644 src/vmm/src/vmm_config/tpm.rs
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 02a599f25..2f6cae76c 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -418,6 +418,7 @@ checksum = "f18f717c5c7c2e3483feb64cccebd077245ad6d19007c2db0fd341d38595353c"
+ name = "devices"
+ version = "0.1.0"
+ dependencies = [
++ "arch",
+  "derive_more",
+  "dumbo",
+  "event-manager",
+@@ -432,6 +433,7 @@ dependencies = [
+  "snapshot",
+  "thiserror",
+  "timerfd",
++ "tpm",
+  "utils",
+  "versionize",
+  "versionize_derive",
+@@ -504,6 +506,7 @@ dependencies = [
+  "serde_json",
+  "snapshot",
+  "timerfd",
++ "tpm",
+  "utils",
+  "vmm",
+ ]
+@@ -671,9 +674,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
+ 
+ [[package]]
+ name = "libc"
+-version = "0.2.137"
++version = "0.2.139"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "fc7fcc620a3bff7cdd7a365be3376c97191aeaccc2a603e600951e452615bf89"
++checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
+ 
+ [[package]]
+ name = "libloading"
+@@ -1217,6 +1220,17 @@ dependencies = [
+  "serde",
+ ]
+ 
++[[package]]
++name = "tpm"
++version = "0.1.0"
++dependencies = [
++ "byteorder",
++ "libc",
++ "log",
++ "thiserror",
++ "vmm-sys-util",
++]
++
+ [[package]]
+ name = "typenum"
+ version = "1.15.0"
+@@ -1381,6 +1395,7 @@ dependencies = [
+  "serde_json",
+  "snapshot",
+  "thiserror",
++ "tpm",
+  "userfaultfd",
+  "utils",
+  "versionize",
+diff --git a/resources/seccomp/x86_64-unknown-linux-musl.json b/resources/seccomp/x86_64-unknown-linux-musl.json
+index fc59d82ba..201299ae6 100644
+--- a/resources/seccomp/x86_64-unknown-linux-musl.json
++++ b/resources/seccomp/x86_64-unknown-linux-musl.json
+@@ -70,6 +70,10 @@
+                 "syscall": "fstat",
+                 "comment": "Used for drive patching & rescanning, for reading the local timezone from /etc/localtime"
+             },
++            {
++                "syscall": "sendmsg",
++                "comment": "Used for communicating with TPM Unix socket"
++            },
+             {
+                 "syscall": "ftruncate",
+                 "comment": "Used for snapshotting"
+diff --git a/src/api_server/src/parsed_request.rs b/src/api_server/src/parsed_request.rs
+index de05b51db..28d91dbd8 100644
+--- a/src/api_server/src/parsed_request.rs
++++ b/src/api_server/src/parsed_request.rs
+@@ -23,6 +23,7 @@ use crate::request::net::{parse_patch_net, parse_put_net};
+ use crate::request::snapshot::{parse_patch_vm_state, parse_put_snapshot};
+ use crate::request::version::parse_get_version;
+ use crate::request::vsock::parse_put_vsock;
++use crate::request::tpm::parse_put_tpm;
+ use crate::ApiServer;
+ 
+ pub(crate) enum RequestAction {
+@@ -117,6 +118,7 @@ impl ParsedRequest {
+             }
+             (Method::Put, "snapshot", Some(body)) => parse_put_snapshot(body, path_tokens.get(1)),
+             (Method::Put, "vsock", Some(body)) => parse_put_vsock(body),
++            (Method::Put, "tpm", Some(body)) => parse_put_tpm(body),
+             (Method::Put, _, None) => method_to_error(Method::Put),
+             (Method::Patch, "balloon", Some(body)) => parse_patch_balloon(body, path_tokens.get(1)),
+             (Method::Patch, "drives", Some(body)) => parse_patch_drive(body, path_tokens.get(1)),
+diff --git a/src/api_server/src/request/mod.rs b/src/api_server/src/request/mod.rs
+index 75f9a0dae..7b6302ccb 100644
+--- a/src/api_server/src/request/mod.rs
++++ b/src/api_server/src/request/mod.rs
+@@ -14,6 +14,7 @@ pub mod net;
+ pub mod snapshot;
+ pub mod version;
+ pub mod vsock;
++pub mod tpm;
+ pub use micro_http::{
+     Body, HttpServer, Method, Request, RequestError, Response, StatusCode, Version,
+ };
+diff --git a/src/api_server/src/request/tpm.rs b/src/api_server/src/request/tpm.rs
+new file mode 100644
+index 000000000..cc280a2ee
+--- /dev/null
++++ b/src/api_server/src/request/tpm.rs
+@@ -0,0 +1,17 @@
++use logger::{METRICS, IncMetric};
++use vmm::vmm_config::tpm::TpmDeviceConfig;
++use crate::request::Body;
++use crate::parsed_request::{Error, ParsedRequest};
++use super::super::VmmAction;
++
++
++pub(crate) fn parse_put_tpm(body: &Body) -> Result<ParsedRequest, Error> {
++    METRICS.put_api_requests.tpm_count.inc();
++    let tpm_cfg = serde_json::from_slice::<TpmDeviceConfig>(body.raw())
++        .map_err(|err| {
++            METRICS.put_api_requests.tpm_fails.inc();
++            err
++        })?;
++    let parsed_req = ParsedRequest::new_sync(VmmAction::SetTpmDevice(tpm_cfg));
++    Ok(parsed_req)
++}
+\ No newline at end of file
+diff --git a/src/api_server/swagger/firecracker.yaml b/src/api_server/swagger/firecracker.yaml
+index 674c3cc66..a4c1a7cd2 100644
+--- a/src/api_server/swagger/firecracker.yaml
++++ b/src/api_server/swagger/firecracker.yaml
+@@ -651,6 +651,34 @@ paths:
+           description: Internal server error
+           schema:
+             $ref: "#/definitions/Error"
++    
++  /tpm:
++    put:
++      summary: Creates/updates a TPM device. Pre-boot only.
++      description:
++        The first call creates the device with the configuration specified
++        in body. Subsequent calls will update the device configuration.
++        May fail if update is not possible.
++      operationId: putGuestTPM
++      parameters:
++        - name: body
++          in: body
++          description: Guest TPM properties
++          required: true
++          schema: 
++            $ref: "#/definitions/TPM"
++      responses:
++        204:
++          description: TPM created/updated
++        400:
++          description: TPM cannot be created due to bad input
++          schema:
++            $ref: "#/definitions/Error"
++        default:
++          description: Internal server error
++          schema:
++            $ref: "#/definitions/Error"
++
+ 
+ definitions:
+   Balloon:
+@@ -1230,3 +1258,13 @@ definitions:
+       vsock_id:
+         type: string
+         description: This parameter has been deprecated since v1.0.0.
++  TPM:
++    type: object
++    description:
++      Defines a TPM device, backed by a UNIX socket communicating with a TPM device on the host.
++    required:
++      - socket
++    properties:
++      socket:
++        type: string
++        description: Path to UNIX socket, which communicates with a TPM Device
+\ No newline at end of file
+diff --git a/src/arch/src/lib.rs b/src/arch/src/lib.rs
+index 8aec44865..15712c3d4 100644
+--- a/src/arch/src/lib.rs
++++ b/src/arch/src/lib.rs
+@@ -50,6 +50,8 @@ pub enum DeviceType {
+     Rtc,
+     /// Device Type: BootTimer.
+     BootTimer,
++    /// Device Type: Tpm.
++    Tpm,
+ }
+ 
+ /// Type for passing information about the initrd in the guest memory.
+diff --git a/src/devices/Cargo.toml b/src/devices/Cargo.toml
+index d267569cb..94faf08af 100644
+--- a/src/devices/Cargo.toml
++++ b/src/devices/Cargo.toml
+@@ -9,6 +9,7 @@ license = "Apache-2.0"
+ event-manager = "0.3.0"
+ libc = "0.2.117"
+ thiserror = "1.0.32"
++tpm = { path = "../tpm" }
+ timerfd = "1.2.0"
+ versionize = "0.1.6"
+ versionize_derive = "0.1.4"
+@@ -26,6 +27,7 @@ utils = { path = "../utils" }
+ virtio_gen = { path = "../virtio_gen" }
+ vm-memory = { path = "../vm-memory" }
+ io_uring = { path = "../io_uring" }
++arch = { path = "../arch" }
+ 
+ [dev-dependencies]
+ proptest = { version = "1.0.0", default-features = false, features = ["std"] }
+diff --git a/src/devices/src/virtio/mod.rs b/src/devices/src/virtio/mod.rs
+index 0ccf57007..14f097a39 100644
+--- a/src/devices/src/virtio/mod.rs
++++ b/src/devices/src/virtio/mod.rs
+@@ -12,6 +12,7 @@ use std::io::Error as IOError;
+ pub mod balloon;
+ pub mod block;
+ pub mod device;
++pub mod tpm;
+ mod mmio;
+ pub mod net;
+ pub mod persist;
+@@ -27,6 +28,7 @@ pub use self::net::*;
+ pub use self::persist::*;
+ pub use self::queue::*;
+ pub use self::vsock::*;
++pub use self::tpm::*;
+ 
+ /// When the driver initializes the device, it lets the device know about the
+ /// completed stages using the Device Status Field.
+@@ -50,6 +52,7 @@ mod device_status {
+ pub const TYPE_NET: u32 = 1;
+ pub const TYPE_BLOCK: u32 = 2;
+ pub const TYPE_BALLOON: u32 = 5;
++pub const TYPE_TPM: u32 = 62;
+ 
+ /// Offset from the base MMIO address of a virtio device used by the guest to notify the device of
+ /// queue events.
+diff --git a/src/devices/src/virtio/queue.rs b/src/devices/src/virtio/queue.rs
+index 4972aad5d..ae63ffeb1 100644
+--- a/src/devices/src/virtio/queue.rs
++++ b/src/devices/src/virtio/queue.rs
+@@ -63,6 +63,7 @@ struct Descriptor {
+ unsafe impl ByteValued for Descriptor {}
+ 
+ /// A virtio descriptor chain.
++#[derive(Clone)]
+ pub struct DescriptorChain<'a> {
+     desc_table: GuestAddress,
+     queue_size: u16,
+diff --git a/src/devices/src/virtio/tpm/device.rs b/src/devices/src/virtio/tpm/device.rs
+new file mode 100644
+index 000000000..c0a3968dd
+--- /dev/null
++++ b/src/devices/src/virtio/tpm/device.rs
+@@ -0,0 +1,273 @@
++use std::cmp::min;
++use std::sync::Arc;
++use std::sync::atomic::AtomicUsize;
++
++use logger::error;
++use logger::warn;
++use virtio_gen::virtio_blk::VIRTIO_F_VERSION_1;
++use virtio_gen::virtio_ring::VIRTIO_RING_F_EVENT_IDX;
++use vm_memory::Bytes;
++use super::TPM_DEV_ID;
++use super::TpmError as Error;
++use utils::eventfd::EventFd;
++use vm_memory::GuestMemoryMmap;
++
++use crate::virtio::ActivateResult;
++use crate::virtio::DescriptorChain;
++use crate::virtio::DeviceState;
++use crate::virtio::IrqTrigger;
++use crate::virtio::IrqType;
++use crate::virtio::Queue;
++use crate::virtio::TYPE_TPM;
++use crate::virtio::VirtioDevice;
++use crate::virtio::tpm::TPM_BUFSIZE;
++
++
++// A single queue of size 2. The guest kernel driver will enqueue a single
++// descriptor chain containing one command buffer and one response buffer at a
++// time.
++const QUEUE_SIZE: u16 = 2;
++const QUEUE_SIZES: &[u16] = &[QUEUE_SIZE];
++
++pub trait TpmBackend: Send {
++    fn execute_command(&mut self, command: &[u8]) -> Vec<u8>;
++}
++
++/// Virtio vTPM device.
++pub struct Tpm {
++    backend: Box<dyn TpmBackend>,
++
++    // Virtio fields
++    pub(crate) avail_features: u64,
++    pub(crate) acked_features: u64,
++
++    pub(crate) activate_evt: EventFd,
++
++    // Transport related fields.
++    pub(crate) queues: Vec<Queue>,
++    pub(crate) queue_evts: [EventFd; 1],
++    pub(crate) device_state: DeviceState,
++    pub(crate) irq_trigger: IrqTrigger,
++}
++
++fn write_to_descriptor_chain(mem: &GuestMemoryMmap, data: &[u8], head: DescriptorChain) -> Result<()>{
++    let mut chunk = data;
++    let mut next_descriptor = Some(head);
++    while let Some(descriptor) = &next_descriptor {
++        if !descriptor.is_write_only() {
++            // skip read-only descriptors
++            next_descriptor = descriptor.next_descriptor();
++            continue;
++        }
++        let len = min(chunk.len(), descriptor.len as usize);
++        match mem.write_slice(&chunk[..len], descriptor.addr) {
++            Ok(()) => {
++                chunk = &chunk[len..];
++            }
++            Err(err) => {
++                error!("Failed to write slice: {:?}", err);
++                return Err(Error::GuestMemory(err));
++            }
++        }
++        if chunk.is_empty() {
++            return Ok(());
++        }
++        next_descriptor = descriptor.next_descriptor();
++    }
++    Err(Error::ResponseTooLong { size: chunk.len() })
++}
++
++fn read_from_descriptor_chain(mem: &GuestMemoryMmap, head: DescriptorChain) -> Result<Vec<u8>> {
++    let mut read_bytes = 0 as usize;
++    let mut buf = vec![0u8; TPM_BUFSIZE];
++    let mut next_descriptor = Some(head);
++    while let Some(descriptor) = &next_descriptor {
++        if descriptor.is_write_only() {
++            // skip write-only descriptors
++            next_descriptor = descriptor.next_descriptor();
++            continue;
++        }
++        let len = min(buf.len(), descriptor.len as usize);
++        if len < descriptor.len as usize {
++            // descriptor contains too much data
++            error!("Descriptor contains too much data for the TPM buffer");
++            return Err(Error::CommandTooLong { size: read_bytes + descriptor.len as usize });
++        }
++        let chunk = &mut buf[read_bytes..len];
++        match mem.read_slice(chunk, descriptor.addr) {
++            Ok(()) => {
++                read_bytes += len;
++            }
++            Err(err) => {
++                error!("Failed to read slice: {:?}", err);
++                return Err(Error::GuestMemory(err));
++            }
++        }
++        next_descriptor = descriptor.next_descriptor();
++    }
++    buf.truncate(read_bytes);
++    Ok(buf)
++
++}
++
++impl Tpm {
++    pub fn new(backend: Box<dyn TpmBackend>) -> Result<Tpm> {
++        let avail_features: u64 = (1u64 << VIRTIO_F_VERSION_1) | (1u64 << VIRTIO_RING_F_EVENT_IDX);
++
++        let queue_evts = [EventFd::new(libc::EFD_NONBLOCK).map_err(Error::EventFd)?];
++
++        let queues = QUEUE_SIZES.iter().map(|&s| Queue::new(s)).collect();
++        Ok(Tpm {
++            backend: backend,
++            avail_features: avail_features,
++            acked_features: 0u64,
++            queues,
++            queue_evts,
++            device_state: DeviceState::Inactive,
++            irq_trigger: IrqTrigger::new().map_err(Error::IrqTrigger)?,
++            activate_evt: EventFd::new(libc::EFD_NONBLOCK).map_err(Error::EventFd)?,
++        })
++    }
++
++    pub fn process_virtio_queues(&mut self) {
++        self.process_queue(0);
++    }
++
++    pub fn id(&self) -> &str {
++        TPM_DEV_ID
++    }
++
++    fn process_queue(&mut self, queue_index: usize) {
++        let mem = self.device_state.mem().unwrap();
++
++        let queue = &mut self.queues[queue_index];
++        
++        while let Some(head) = queue.pop_or_enable_notification(mem) {
++            
++            
++            if !head.has_next() {
++                error!("Descriptorchain only contained 1 item, should be 2 as per the driver.");
++                continue;
++            }
++            let head_index = head.index;
++            let len = head.len as usize;
++            if len > TPM_BUFSIZE {
++                error!("{}", Error::CommandTooLong { size: len });
++                // skip this descriptorchain
++                continue;
++            }
++            let cmd = match read_from_descriptor_chain(mem, head.clone()) {
++                Ok(cmd) => cmd,
++                Err(err) => {
++                    error!("Failed to read descriptorchain: {}", err);
++                    continue;
++                }
++            };
++            let resp = &self.backend.execute_command(&cmd);
++            if resp.len() > TPM_BUFSIZE {
++                error!("{}", Error::ResponseTooLong { size: resp.len() });
++                continue;
++            }
++            match write_to_descriptor_chain(mem, resp, head) {
++                Ok(()) => match queue.add_used(mem, head_index, resp.len() as u32) {
++                    Ok(()) => (),
++                    Err(err) => {
++                        error!("Failed to add available descriptor {}: {}", head_index, err);
++                        continue;
++                    }
++                }
++                Err(err) => {
++                    error!("Failed to write descriptorchain {}", err);
++                    continue;
++                }
++            }
++            if queue.prepare_kick(mem) {
++                self.irq_trigger.trigger_irq(IrqType::Vring).unwrap_or_else(|e| {
++                    error!("Error triggering tpm irq {:?}", e);
++                })
++            }
++        }
++    }
++
++    
++
++}
++
++impl VirtioDevice for Tpm {
++    fn avail_features(&self) -> u64 {
++        self.avail_features
++    }
++
++    fn acked_features(&self) -> u64 {
++        self.acked_features
++    }
++
++    fn set_acked_features(&mut self, acked_features: u64) {
++        self.acked_features = acked_features;
++    }
++
++    fn device_type(&self) -> u32 {
++        TYPE_TPM
++    }    
++
++    fn activate(
++        &mut self,
++        mem: GuestMemoryMmap
++    ) -> ActivateResult {
++        if self.queues.len() != 1 {
++            error!("expected 1 queue, got {}", self.queues.len());
++            return Err(super::super::ActivateError::BadActivate);
++        }
++        if self.activate_evt.write(1).is_err() {
++            error!("Tpm: Cannot write to activate_evt");
++            return Err(super::super::ActivateError::BadActivate);
++        }
++        self.device_state = DeviceState::Activated(mem);
++
++        Ok(())
++    }
++
++    fn queues(&self) -> &[Queue] {
++        &self.queues
++    }
++
++    fn queues_mut(&mut self) -> &mut [Queue] {
++        &mut self.queues
++    }
++
++    fn queue_events(&self) -> &[EventFd] {
++        &self.queue_evts
++    }
++
++    fn interrupt_evt(&self) -> &EventFd {
++        &self.irq_trigger.irq_evt
++    }
++
++    fn interrupt_status(&self) -> Arc<AtomicUsize> {
++        self.irq_trigger.irq_status.clone()
++    }
++
++    fn read_config(&self, offset: u64, data: &mut [u8]) {
++        warn!(
++            "vtpm: guest driver attempted to read device config (offset={:x}, len={:x})",
++            offset,
++            data.len()
++        );
++    }
++
++    fn write_config(&mut self, offset: u64, data: &[u8]) {
++        warn!(
++            "vtpm: guest driver attempted to write device config (offset={:x}, len={:x})",
++            offset,
++            data.len()
++        );
++    }
++
++    fn is_activated(&self) -> bool {
++        self.device_state.is_activated()
++    }
++}
++
++
++
++type Result<T> = std::result::Result<T, Error>;
+diff --git a/src/devices/src/virtio/tpm/emulator.rs b/src/devices/src/virtio/tpm/emulator.rs
+new file mode 100644
+index 000000000..615c4e98f
+--- /dev/null
++++ b/src/devices/src/virtio/tpm/emulator.rs
+@@ -0,0 +1,24 @@
++use logger::error;
++use tpm::emulator::{Emulator, BackendCmd};
++
++use crate::virtio::tpm::TPM_BUFSIZE;
++
++use super::device::TpmBackend;
++
++impl TpmBackend for Emulator {
++    fn execute_command<'a>(&'a mut self, command: &[u8]) -> Vec<u8> {
++        let mut buf = [0u8; TPM_BUFSIZE];
++        buf[..command.len()].copy_from_slice(command);
++        let mut mapped = BackendCmd {
++            buffer: &mut buf,
++            input_len: command.len()
++        };
++        match self.deliver_request(&mut mapped) {
++            Ok(size) => mapped.buffer[..size].to_vec(),
++            Err(err) => {
++                error!("Error occurred delivering request to TPM emulator backend: {:?}", err);
++                return vec![];
++            }
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/src/devices/src/virtio/tpm/event_handler.rs b/src/devices/src/virtio/tpm/event_handler.rs
+new file mode 100644
+index 000000000..b985fc300
+--- /dev/null
++++ b/src/devices/src/virtio/tpm/event_handler.rs
+@@ -0,0 +1,68 @@
++use std::os::fd::AsRawFd;
++
++use event_manager::{MutEventSubscriber, EventOps, Events, EventSet};
++use logger::{error};
++
++use crate::virtio::VirtioDevice;
++
++use super::Tpm;
++
++impl Tpm {
++    fn register_activate_event(&self, ops: &mut EventOps) {
++        if let Err(err) = ops.add(Events::new(&self.activate_evt, EventSet::IN)) {
++            error!("Failed to register activate event: {}", err);
++        }
++    }
++
++    fn register_runtime_events(&self, ops: &mut EventOps) {
++        if let Err(err) = ops.add(Events::new(&self.queue_evts[0], EventSet::IN)) {
++            error!("Failed to register queue event: {}", err);
++        }
++    }
++
++    fn process_activate_event(&self, ops: &mut EventOps) {
++        if let Err(err) = self.activate_evt.read() {
++            error!("Failed to consume tpm activate event: {:?}", err);
++        }
++        self.register_runtime_events(ops);
++        if let Err(err) = ops.remove(Events::new(&self.activate_evt, EventSet::IN)) {
++            error!("Failed to un-register activate event: {:?}", err);
++        }
++    }
++}
++
++impl MutEventSubscriber for Tpm {
++    fn process(&mut self, event: Events, ops: &mut EventOps) {
++        let source = event.fd();
++        let event_set = event.event_set();
++        let supported_events = EventSet::IN;
++
++        if !supported_events.contains(event_set) {
++            error!("Received unknown event: {:?} from source {:?}", event_set, source);
++            return;
++        }
++        if !self.is_activated() {
++            error!("TPM: The device is not yet activated. Spurious event received: {:?}", source);
++            return;
++        }
++        let activate_fd = self.activate_evt.as_raw_fd();
++        let virtq_fd = self.queue_evts[0].as_raw_fd();
++        match source {
++            _ if source == activate_fd => self
++                .process_activate_event(ops),
++            _ if source == virtq_fd => self
++                .process_virtio_queues(),
++            _ => {
++                error!("TPM: Spurious event received: {:?}", source);
++            }
++       }
++    }
++
++    fn init(&mut self, ops: &mut EventOps) {
++        if self.is_activated() {
++            self.register_runtime_events(ops);
++        } else {
++            self.register_activate_event(ops);
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/src/devices/src/virtio/tpm/mod.rs b/src/devices/src/virtio/tpm/mod.rs
+new file mode 100644
+index 000000000..84112580f
+--- /dev/null
++++ b/src/devices/src/virtio/tpm/mod.rs
+@@ -0,0 +1,39 @@
++pub mod device;
++pub mod event_handler;
++pub mod emulator;
++
++use std::io;
++
++use thiserror::Error;
++use vm_memory::{GuestMemoryError};
++
++pub use self::device::Tpm;
++pub use self::event_handler::*;
++
++
++// Maximum command or response message size permitted by this device
++// implementation. Named to match the equivalent constant in Linux's tpm.h.
++// There is no hard requirement that the value is the same but it makes sense.
++const TPM_BUFSIZE: usize = 4096;
++
++pub const TPM_DEV_ID: &str = "vtpm";
++
++#[derive(Error, Debug)]
++pub enum TpmError {
++    #[error("vtpm response buffer is too small: {size} < {required} bytes")]
++    BufferTooSmall { size: usize, required: usize },
++    #[error("vtpm command is too long: {size} > {} bytes", TPM_BUFSIZE)]
++    CommandTooLong { size: usize },
++    #[error("vtpm eventfd error: {0}")]
++    EventFd(io::Error),
++    #[error("vtpm irqtrigger error: {0}")]
++    IrqTrigger(io::Error),
++    #[error(
++        "vtpm simulator generated a response that is unexpectedly long: {size} > {} bytes",
++        TPM_BUFSIZE
++    )]
++    ResponseTooLong { size: usize },
++    #[error("vtpm failed accessing guest memory: {0}")]
++    GuestMemory(GuestMemoryError),
++
++}
+diff --git a/src/firecracker/Cargo.toml b/src/firecracker/Cargo.toml
+index 68adeae0e..eacc93480 100644
+--- a/src/firecracker/Cargo.toml
++++ b/src/firecracker/Cargo.toml
+@@ -21,6 +21,7 @@ seccompiler = { path = "../seccompiler" }
+ snapshot = { path = "../snapshot"}
+ utils = { path = "../utils" }
+ vmm = { path = "../vmm" }
++tpm = { path = "../tpm" }
+ 
+ [dev-dependencies]
+ cargo_toml = "0.13.0"
+diff --git a/src/logger/src/metrics.rs b/src/logger/src/metrics.rs
+index 891d50971..3bdf0050d 100644
+--- a/src/logger/src/metrics.rs
++++ b/src/logger/src/metrics.rs
+@@ -408,6 +408,10 @@ pub struct PutRequestsMetrics {
+     pub vsock_count: SharedIncMetric,
+     /// Number of failures in creating a vsock device.
+     pub vsock_fails: SharedIncMetric,
++    /// Number of PUTs for creating a TPM device.
++    pub tpm_count: SharedIncMetric,
++    /// Number of failures in creating a TPM device.
++    pub tpm_fails: SharedIncMetric,
+ }
+ 
+ /// Metrics specific to PATCH API Requests for counting user triggered actions and/or failures.
+diff --git a/src/tpm/Cargo.toml b/src/tpm/Cargo.toml
+new file mode 100644
+index 000000000..1aa7b070e
+--- /dev/null
++++ b/src/tpm/Cargo.toml
+@@ -0,0 +1,13 @@
++[package]
++name = "tpm"
++edition = "2021"
++authors = ["Melker Veltman", "Alexandra Parkegren"]
++license = "Apache-2.0"
++version = "0.1.0"
++
++[dependencies]
++byteorder = "1.4.3"
++libc = "0.2.138"
++log = "0.4.17"
++thiserror = "1.0.37"
++vmm-sys-util = "0.11.0"
+diff --git a/src/tpm/src/emulator.rs b/src/tpm/src/emulator.rs
+new file mode 100644
+index 000000000..d32a5783e
+--- /dev/null
++++ b/src/tpm/src/emulator.rs
+@@ -0,0 +1,443 @@
++use crate::socket::SocketDev;
++use crate::{Commands, MemberType, Ptm, PtmCap, PtmEst, PtmInit, PtmResult, PtmSetBufferSize};
++use crate::{TPM_CRB_BUFFER_MAX, TPM_SUCCESS};
++use libc::c_void;
++use libc::{sockaddr_storage, socklen_t};
++use std::convert::TryInto;
++use std::os::unix::io::RawFd;
++use std::path::Path;
++use std::{mem, ptr};
++use std::fmt::{Display, Formatter};
++use libc::{timeval,setsockopt,SOL_SOCKET,SO_RCVTIMEO};
++
++const TPM_REQ_HDR_SIZE: usize = 10;
++
++/* capability flags returned by PTM_GET_CAPABILITY */
++const PTM_CAP_INIT: u64 = 1;
++const PTM_CAP_SHUTDOWN: u64 = 1 << 1;
++const PTM_CAP_GET_TPMESTABLISHED: u64 = 1 << 2;
++const PTM_CAP_SET_LOCALITY: u64 = 1 << 3;
++const PTM_CAP_CANCEL_TPM_CMD: u64 = 1 << 5;
++const PTM_CAP_RESET_TPMESTABLISHED: u64 = 1 << 7;
++const PTM_CAP_STOP: u64 = 1 << 10;
++const PTM_CAP_SET_DATAFD: u64 = 1 << 12;
++const PTM_CAP_SET_BUFFERSIZE: u64 = 1 << 13;
++
++///Check if the input command is selftest
++///
++pub fn is_selftest(input: &[u8]) -> bool {
++    if input.len() >= TPM_REQ_HDR_SIZE {
++        let ordinal: &[u8; 4] = input[6..6 + 4]
++            .try_into()
++            .expect("slice with incorrect length");
++
++        return u32::from_ne_bytes(*ordinal).to_be() == 0x143;
++    }
++    false
++}
++
++#[derive(Debug)]
++pub enum TpmEmulatorError {
++    InitializeEmulator(String),
++    PrepareDataFd(String),
++    RunControlCmd(String),
++    CheckCaps(String),
++    DeliverRequest(String),
++    SendReceive(String),
++    SelfTest(String),
++}
++impl Display for TpmEmulatorError {
++    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
++        use self::TpmEmulatorError::*;
++        match self {
++            InitializeEmulator(err) => write!(f, "Could not initialize emulator's backend: {:?}", err),
++            PrepareDataFd(err) => write!(f, "Failed to create data fd to pass to swtpm: {:?}", err),
++            RunControlCmd(err) => write!(f, "Failed to run Control Cmd: {:?}", err),
++            CheckCaps(err) => write!(f, "Emulator doesn't implement min required capabilities: {:?}", err),
++            DeliverRequest(err) => write!(f, "Emulator failed to deliver request: {:?}", err),
++            SendReceive(err) => write!(f, "Emulator failed to send/receive msg on data fd: {:?}", err),
++            SelfTest(err) => write!(f, "Incorrect response to Self Test: {:?}", err),
++        }
++    }
++}
++
++type Result<T> = std::result::Result<T, TpmEmulatorError>;
++
++pub struct BackendCmd<'a> {
++    // This buffer is used for both input and output.
++    // When used for input, the length of the data is input_len.
++    pub buffer: &'a mut [u8],
++    pub input_len: usize,
++}
++
++pub struct Emulator {
++    caps: PtmCap, /* capabilities of the TPM */
++    control_socket: SocketDev,
++    data_fd: RawFd,
++    established_flag_cached: bool,
++    established_flag: bool,
++}
++
++impl Emulator {
++    /// Create Emulator Instance
++    ///
++    /// # Arguments
++    ///
++    /// * `path` - A path to the Unix Domain Socket swtpm is listening on
++    ///
++    pub fn new(path: String) -> Result<Self> {
++        if !Path::new(&path).exists() {
++            return Err(TpmEmulatorError::InitializeEmulator(
++                format!("{} {:?} {}", "The input TPM Socket path:", path, "does not exist"
++            )));
++        }
++        let mut socket = SocketDev::new();
++        socket.init(path).map_err(|e| {
++            TpmEmulatorError::InitializeEmulator(format!("{} {:?}", 
++            "Failed while initializing tpm emulator:", e))
++        })?;
++
++        let mut emulator = Self {
++            caps: 0,
++            control_socket: socket,
++            data_fd: -1,
++            established_flag_cached: false,
++            established_flag: false,
++        };
++
++        emulator.prepare_data_fd()?;
++
++        emulator.probe_caps()?;
++        if !emulator.check_caps() {
++            return Err(TpmEmulatorError::InitializeEmulator(
++                String::from("Required capabilities not supported by tpm backend")
++            ));
++        }
++
++        if !emulator.get_established_flag() {
++            return Err(TpmEmulatorError::InitializeEmulator(
++                String::from("TPM not in established state")
++            ));
++        }
++
++        Ok(emulator)
++    }
++
++    /// Create socketpair, assign one socket/FD as data_fd to Control Socket
++    /// The other socket/FD will be assigned to msg_fd, which will be sent to swtpm
++    /// via CmdSetDatafd control command
++    fn prepare_data_fd(&mut self) -> Result<()> {
++        let mut res: PtmResult = 0;
++
++        let mut fds = [-1, -1];
++        // SAFETY: FFI calls and return value of the unsafe call is checked
++        unsafe {
++            let ret = libc::socketpair(libc::AF_UNIX, libc::SOCK_STREAM, 0, fds.as_mut_ptr());
++            if ret == -1 {
++                return Err(TpmEmulatorError::PrepareDataFd(format!("{} {:?}",
++                    "Failed to prepare data fd for tpm emulator. Error Code", std::io::Error::last_os_error()
++                )));
++            }
++        }
++        self.control_socket.set_msgfd(fds[1]);
++        debug!("data fd to be configured in swtpm = {:?}", fds[1]);
++        self.run_control_cmd(Commands::CmdSetDatafd, &mut res, 0, mem::size_of::<u32>())?;
++        debug!("data fd in cloud-hypervisor = {:?}", fds[0]);
++        self.data_fd = fds[0];
++
++        // SAFETY: FFI calls and return value of the unsafe call is checked
++        unsafe {
++            let tv = timeval {
++                tv_sec: 0,
++                tv_usec: 100000, // Set recv timeout to 100ms
++            };
++            let ret = setsockopt(
++                fds[0],
++                SOL_SOCKET as i32,
++                SO_RCVTIMEO as i32,
++                &tv as *const _ as *const libc::c_void,
++                std::mem::size_of::<timeval>() as u32,
++            );
++            if ret == -1 {
++                return Err(TpmEmulatorError::PrepareDataFd( format!("{} {:?}",
++                    "Failed to set receive timeout on data fd socket. Error Code", std::io::Error::last_os_error() 
++                )));
++            }
++        }
++        self.control_socket.set_datafd(fds[0]);
++        Ok(())
++    }
++
++    /// Gather TPM Capabilities and cache them in Emulator
++    ///
++    fn probe_caps(&mut self) -> Result<()> {
++        let mut caps: u64 = 0;
++        self.run_control_cmd(
++            Commands::CmdGetCapability,
++            &mut caps,
++            0,
++            mem::size_of::<u64>(),
++        )?;
++        self.caps = caps;
++        Ok(())
++    }
++
++    /// Check if minimum set of capabitlies are supported
++    fn check_caps(&mut self) -> bool {
++        /* min. required capabilities for TPM 2.0*/
++        let caps: PtmCap = PTM_CAP_INIT
++            | PTM_CAP_SHUTDOWN
++            | PTM_CAP_GET_TPMESTABLISHED
++            | PTM_CAP_SET_LOCALITY
++            | PTM_CAP_RESET_TPMESTABLISHED
++            | PTM_CAP_SET_DATAFD
++            | PTM_CAP_STOP
++            | PTM_CAP_SET_BUFFERSIZE;
++
++        if (self.caps & caps) != caps {
++            return false;
++        }
++        true
++    }
++
++    ///
++    /// # Arguments
++    ///
++    /// * `cmd` - Control Command to run
++    /// * `msg` - Optional msg to be sent along with Control Command
++    /// * `msg_len_in` - len of 'msg' in bytes, if passed
++    /// * `msg_len_out` - length of expected output from Control Command in bytes
++    ///
++    fn run_control_cmd(
++        &mut self,
++        cmd: Commands,
++        msg: &mut dyn Ptm,
++        msg_len_in: usize,
++        msg_len_out: usize,
++    ) -> Result<()> {
++        debug!("Control Cmd to send : {:02X?}", cmd);
++
++        let cmd_no = (cmd as u32).to_be_bytes();
++        let n = mem::size_of::<u32>() + msg_len_in;
++
++        let converted_req = msg.ptm_to_request();
++        debug!("converted request: {:02X?}", converted_req);
++
++        let mut buf = Vec::<u8>::with_capacity(n);
++
++        buf.extend(cmd_no);
++        buf.extend(converted_req);
++        debug!("full Control request {:02X?}", buf);
++
++        let written = self.control_socket.write(&buf).map_err(|e| {
++            TpmEmulatorError::RunControlCmd( format!("{} {:02X?} {} {:?}",
++                "Failed while running", cmd, "Control Cmd. Error:", e)
++            )
++        })?;
++
++        if written < buf.len() {
++            return Err(TpmEmulatorError::RunControlCmd( format!("{} {:02X?} {}", 
++            "Truncated write while running", cmd, "Control Cmd")));
++        }
++
++        // The largest response is 16 bytes so far.
++        if msg_len_out > 16 {
++            return Err(TpmEmulatorError::RunControlCmd(format!("{} {:02X?} {} {}",
++                "Response size is too large for Cmd", cmd, ", max 16 wanted", msg_len_out
++            )));
++        }
++
++        let mut output = [0u8; 16];
++
++        // Every Control Cmd gets atleast a result code in response. Read it
++        let read_size = self.control_socket.read(&mut output).map_err(|e| {
++            TpmEmulatorError::RunControlCmd( format!("{} {:02X?} {} {:?}",
++                "Failed while reading response for Control Cmd:", cmd, ". Error:", e
++            ))
++        })?;
++
++        if msg_len_out != 0 {
++            msg.update_ptm_with_response(&output[0..read_size])
++                .map_err(|e| {
++                    TpmEmulatorError::RunControlCmd( format!("{} {:02X?} {} {:?}",
++                        "Failed while converting response of Control Cmd:", cmd, " to PTM. Error: ", e
++                    ))
++                })?;
++        } else {
++            // No response expected, only handle return code
++            msg.set_member_type(MemberType::Response);
++        }
++
++        if msg.get_result_code() != TPM_SUCCESS {
++            return Err(TpmEmulatorError::RunControlCmd( format!("{} {:?}",
++                "Control Cmd returned error code :",
++                msg.get_result_code()
++            )));
++        }
++        debug!("Control Cmd Response : {:02X?}", &output[0..read_size]);
++        Ok(())
++    }
++
++    pub fn get_established_flag(&mut self) -> bool {
++        let mut est: PtmEst = PtmEst::new();
++
++        if self.established_flag_cached {
++            return self.established_flag;
++        }
++
++        if let Err(e) = self.run_control_cmd(
++            Commands::CmdGetTpmEstablished,
++            &mut est,
++            0,
++            2 * mem::size_of::<u32>(),
++        ) {
++            error!(
++                "Failed to run CmdGetTpmEstablished Control Cmd. Error: {:?}",
++                e
++            );
++            return false;
++        }
++
++        self.established_flag_cached = true;
++        if est.resp.bit != 0 {
++            self.established_flag = false;
++        } else {
++            self.established_flag = true;
++        }
++
++        self.established_flag
++    }
++
++    /// Function to write to data socket and read the response from it
++    pub fn deliver_request(&mut self, cmd: &mut BackendCmd) -> Result<usize> {
++        // SAFETY: type "sockaddr_storage" is valid with an all-zero byte-pattern value
++        let mut addr: sockaddr_storage = unsafe { mem::zeroed() };
++        let mut len = mem::size_of::<sockaddr_storage>() as socklen_t;
++        let isselftest = is_selftest(&cmd.buffer[0..cmd.input_len]);
++
++        debug!(
++            "Send cmd: {:02X?}  of len {:?} on data_ioc ",
++            cmd.buffer, cmd.input_len
++        );
++
++        let data_vecs = [libc::iovec {
++            iov_base: cmd.buffer.as_ptr() as *mut libc::c_void,
++            iov_len: cmd.input_len,
++        }; 1];
++
++        // SAFETY: all zero values from the unsafe method are updated before usage
++        let mut msghdr: libc::msghdr = unsafe { mem::zeroed() };
++        msghdr.msg_name = ptr::null_mut();
++        msghdr.msg_namelen = 0;
++        msghdr.msg_iov = data_vecs.as_ptr() as *mut libc::iovec;
++        msghdr.msg_iovlen = data_vecs.len() as _;
++        msghdr.msg_control = ptr::null_mut();
++        msghdr.msg_controllen = 0;
++        msghdr.msg_flags = 0;
++        // SAFETY: FFI call and the return value of the unsafe method is checked
++        unsafe {
++            let ret = libc::sendmsg(self.data_fd, &msghdr, 0);
++            if ret == -1 {
++                return Err(TpmEmulatorError::SendReceive( format!("{} {:?}",
++                    "Failed to send tpm command over Data FD. Error Code", std::io::Error::last_os_error()
++                )));
++            }
++        }
++
++        let output_len;
++        // SAFETY: FFI calls and return value from unsafe method is checked
++        unsafe {
++            let ret = libc::recvfrom(
++                self.data_fd,
++                cmd.buffer.as_mut_ptr() as *mut c_void,
++                cmd.buffer.len(),
++                0,
++                &mut addr as *mut libc::sockaddr_storage as *mut libc::sockaddr,
++                &mut len as *mut socklen_t,
++            );
++            if ret == -1 {
++                return Err(TpmEmulatorError::SendReceive( format!("{} {:?}",
++                    "Failed to receive response for tpm command over Data FD. Error Code", 
++                    std::io::Error::last_os_error()
++                )));
++            }
++            output_len = ret as usize;
++        }
++        debug!(
++            "response = {:02X?} len = {:?} selftest = {:?}",
++            cmd.buffer, output_len, isselftest
++        );
++
++        if isselftest && output_len < 10 {
++            return Err(TpmEmulatorError::SelfTest( format!("{} {:?} {}",
++                "Self test response should have 10 bytes. Only", output_len, "returned"
++            )));
++        }
++
++        Ok(output_len)
++    }
++
++    pub fn cancel_cmd(&mut self) -> Result<()> {
++        let mut res: PtmResult = 0;
++
++        // Check if emulator implements Cancel Cmd
++        if (self.caps & PTM_CAP_CANCEL_TPM_CMD) != PTM_CAP_CANCEL_TPM_CMD {
++            return Err(TpmEmulatorError::CheckCaps(
++                String::from("Emulator does not implement 'Cancel Command' Capability")
++            ));
++        }
++        self.run_control_cmd(
++            Commands::CmdCancelTpmCmd,
++            &mut res,
++            0,
++            mem::size_of::<u32>(),
++        )?;
++        Ok(())
++    }
++
++    /// Configure buffersize to use while communicating with swtpm
++    fn set_buffer_size(&mut self, wantedsize: usize) -> Result<usize> {
++        let mut psbs: PtmSetBufferSize = PtmSetBufferSize::new(wantedsize as u32);
++
++        self.stop_tpm()?;
++
++        self.run_control_cmd(
++            Commands::CmdSetBufferSize,
++            &mut psbs,
++            mem::size_of::<u32>(),
++            4 * mem::size_of::<u32>(),
++        )?;
++
++        Ok(psbs.get_bufsize() as usize)
++    }
++
++    pub fn startup_tpm(&mut self, buffersize: usize) -> Result<()> {
++        let mut init: PtmInit = PtmInit::new();
++
++        if buffersize != 0 {
++            let actual_size = self.set_buffer_size(buffersize)?;
++            debug!("set tpm buffersize to {:?} during Startup", actual_size);
++        }
++
++        self.run_control_cmd(
++            Commands::CmdInit,
++            &mut init,
++            mem::size_of::<u32>(),
++            mem::size_of::<u32>(),
++        )?;
++
++        Ok(())
++    }
++
++    fn stop_tpm(&mut self) -> Result<()> {
++        let mut res: PtmResult = 0;
++
++        self.run_control_cmd(Commands::CmdStop, &mut res, 0, mem::size_of::<u32>())?;
++
++        Ok(())
++    }
++
++    pub fn get_buffer_size(&mut self) -> usize {
++        self.set_buffer_size(0).unwrap_or(TPM_CRB_BUFFER_MAX)
++    }
++}
+diff --git a/src/tpm/src/lib.rs b/src/tpm/src/lib.rs
+new file mode 100644
+index 000000000..4f5bad059
+--- /dev/null
++++ b/src/tpm/src/lib.rs
+@@ -0,0 +1,446 @@
++// Copyright © 2022, Microsoft Corporation
++//
++// SPDX-License-Identifier: Apache-2.0
++//
++
++#[macro_use]
++extern crate log;
++
++pub mod emulator;
++pub mod socket;
++use std::convert::TryInto;
++use std::fmt::{Display, Formatter};
++
++pub const TPM_CRB_BUFFER_MAX: usize = 3968; // 0x1_000 - 0x80
++pub const TPM_SUCCESS: u32 = 0x0;
++
++/*
++ * Structures required to process Request and Responses of Control commands
++ * used by control channel over UNIX socket interface
++ *
++ * All messages contain big-endian data.
++ *
++ * Reference: https://github.com/stefanberger/swtpm/blob/master/man/man3/swtpm_ioctls.pod
++ */
++#[derive(Debug, Clone, Copy)]
++pub enum Commands {
++    CmdGetCapability = 1,
++    CmdInit,
++    CmdShutdown,
++    CmdGetTpmEstablished,
++    CmdSetLocality,
++    CmdHashStart,
++    CmdHashData,
++    CmdHashEnd,
++    CmdCancelTpmCmd,
++    CmdStoreVolatile,
++    CmdResetTpmEstablished,
++    CmdGetStateBlob,
++    CmdSetStateBlob,
++    CmdStop,
++    CmdGetConfig,
++    CmdSetDatafd,
++    CmdSetBufferSize,
++}
++
++#[derive(Debug)]
++pub enum TpmLibError { 
++    ConvertToPtm(String),
++}
++impl Display for TpmLibError {
++    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
++        use self::TpmLibError::*;
++        match self {
++            ConvertToPtm(err) => write!(f, "Failed converting buf to PTM : {:?}", err),
++        }
++    }
++}
++type Result<T> = std::result::Result<T, TpmLibError>;
++
++#[derive(PartialEq, Eq, Copy, Clone, Debug)]
++pub enum MemberType {
++    Request,
++    Response,
++    Error,
++    Cap,
++}
++
++pub trait Ptm {
++    // Get Member Type
++    fn get_member_type(&self) -> MemberType;
++
++    // Set Member Type
++    fn set_member_type(&mut self, mem: MemberType);
++
++    // Convert PTM Request to bytes to be sent to tpm
++    fn ptm_to_request(&self) -> Vec<u8>;
++
++    // Update PTM from tpm's response
++    fn update_ptm_with_response(&mut self, buf: &[u8]) -> Result<()>;
++
++    // Update tpm result
++    fn set_result_code(&mut self, res: u32);
++
++    fn get_result_code(&self) -> u32;
++}
++
++/*
++ * Every response for a tpm Control Command execution must hold tpm return
++ * code (PtmResult) as its first element.
++ * Based on the type of input Control Command additional data could be
++ * appended to the response.
++ */
++pub type PtmResult = u32;
++
++impl Ptm for PtmResult {
++    fn ptm_to_request(&self) -> Vec<u8> {
++        Vec::new()
++    }
++
++    fn get_member_type(&self) -> MemberType {
++        MemberType::Response
++    }
++
++    fn update_ptm_with_response(&mut self, buf: &[u8]) -> Result<()> {
++        let expected_len = 4;
++        let len = buf.len();
++        if len != expected_len {
++            return Err(TpmLibError::ConvertToPtm(
++                String::from(format!("PtmRes buffer is of incorrect length. Got {len} expected {expected_len}."))
++            ));
++        }
++
++        *self = u32::from_be_bytes(buf[..].try_into().unwrap());
++        Ok(())
++    }
++
++    fn set_member_type(&mut self, _mem: MemberType) {}
++
++    fn set_result_code(&mut self, res: u32) {
++        *self = res;
++    }
++
++    fn get_result_code(&self) -> u32 {
++        *self
++    }
++}
++
++/* GET_CAPABILITY Response */
++pub type PtmCap = u64;
++impl Ptm for PtmCap {
++    fn ptm_to_request(&self) -> Vec<u8> {
++        // tpm's GetCapability call doesn't need any supporting message
++        // return an empty Buffer
++        Vec::new()
++    }
++
++    fn get_member_type(&self) -> MemberType {
++        MemberType::Cap
++    }
++
++    fn update_ptm_with_response(&mut self, buf: &[u8]) -> Result<()> {
++        let expected_len = 8;
++        let len = buf.len();
++        if len != expected_len {
++            return Err(TpmLibError::ConvertToPtm(
++                String::from(format!("Response for GetCapability cmd is of incorrect length. Got {len} expected {expected_len}."))
++            ));
++        }
++        *self = u64::from_be_bytes(buf[..].try_into().unwrap());
++        Ok(())
++    }
++
++    fn set_member_type(&mut self, _mem: MemberType) {}
++
++    fn set_result_code(&mut self, _res: u32) {}
++
++    fn get_result_code(&self) -> u32 {
++        ((*self) >> 32) as u32
++    }
++}
++
++/* GET_TPMESTABLISHED Reponse */
++#[derive(Debug)]
++pub struct PtmEstResp {
++    pub bit: u8,
++}
++
++#[derive(Debug)]
++pub struct PtmEst {
++    member: MemberType,
++    pub resp: PtmEstResp,
++    pub result_code: PtmResult,
++}
++
++impl PtmEst {
++    pub fn new() -> Self {
++        Self {
++            member: MemberType::Response,
++            result_code: 0,
++            resp: PtmEstResp { bit: 0 },
++        }
++    }
++}
++
++impl Default for PtmEst {
++    fn default() -> Self {
++        Self::new()
++    }
++}
++
++impl Ptm for PtmEst {
++    fn ptm_to_request(&self) -> Vec<u8> {
++        // tpm's GetTpmEstablished call doesn't need any supporting message
++        // return an empty Buffer
++        Vec::new()
++    }
++
++    fn get_member_type(&self) -> MemberType {
++        self.member
++    }
++
++    fn update_ptm_with_response(&mut self, buf: &[u8]) -> Result<()> {
++        let expected_len = 8;
++        let len = buf.len();
++        if len != expected_len {
++            return Err(TpmLibError::ConvertToPtm(
++                String::from(format!("Response for GetTpmEstablished cmd is of incorrect length. Got {len} expected {expected_len}."))
++            ));
++        }
++        self.set_result_code(u32::from_be_bytes(buf[..4].try_into().unwrap()));
++        self.resp.bit = buf[4];
++        Ok(())
++    }
++
++    fn set_member_type(&mut self, _mem: MemberType) {}
++
++    fn set_result_code(&mut self, res: u32) {
++        self.result_code = res
++    }
++
++    fn get_result_code(&self) -> u32 {
++        self.result_code
++    }
++}
++
++/* INIT Response */
++
++#[derive(Debug)]
++pub struct PtmInit {
++    pub member: MemberType,
++    /* request */
++    pub init_flags: u32,
++    /* response */
++    pub result_code: PtmResult,
++}
++
++impl Default for PtmInit {
++    fn default() -> Self {
++        Self::new()
++    }
++}
++
++impl PtmInit {
++    pub fn new() -> Self {
++        Self {
++            member: MemberType::Request,
++            init_flags: 0,
++            result_code: 0,
++        }
++    }
++}
++
++impl Ptm for PtmInit {
++    fn ptm_to_request(&self) -> Vec<u8> {
++        let mut buf: Vec<u8> = Vec::<u8>::new();
++        buf.extend_from_slice(&self.init_flags.to_be_bytes());
++        buf
++    }
++
++    fn get_member_type(&self) -> MemberType {
++        self.member
++    }
++
++    fn update_ptm_with_response(&mut self, buf: &[u8]) -> Result<()> {
++        let expected_len = 4;
++        let len = buf.len();
++        if len != expected_len {
++            return Err(TpmLibError::ConvertToPtm(
++                String::from(format!("Response for Init cmd is of incorrect length. Got {len} expected {expected_len}."))
++            ));
++        }
++        self.set_member_type(MemberType::Response);
++        self.set_result_code(u32::from_be_bytes(buf[..].try_into().unwrap()));
++        Ok(())
++    }
++
++    fn set_member_type(&mut self, mem: MemberType) {
++        self.member = mem
++    }
++
++    fn set_result_code(&mut self, res: u32) {
++        self.result_code = res
++    }
++
++    fn get_result_code(&self) -> u32 {
++        self.result_code
++    }
++}
++
++/*
++ * PTM_SET_BUFFERSIZE: Set the buffer size to be used by the tpm.
++ * A 0 on input queries for the current buffer size. Any other
++ * number will try to set the buffer size. The returned number is
++ * the buffer size that will be used, which can be larger than the
++ * requested one, if it was below the minimum, or smaller than the
++ * requested one, if it was above the maximum.
++ *
++ * SET_BUFFERSIZE Response
++ */
++#[derive(Debug)]
++pub struct PtmSBSReq {
++    buffersize: u32,
++}
++
++#[derive(Debug)]
++pub struct PtmSBSResp {
++    bufsize: u32,
++    minsize: u32,
++    maxsize: u32,
++}
++
++#[derive(Debug)]
++pub struct PtmSetBufferSize {
++    pub mem: MemberType,
++    /* request */
++    pub req: PtmSBSReq,
++    /* response */
++    pub resp: PtmSBSResp,
++    pub result_code: PtmResult,
++}
++
++impl PtmSetBufferSize {
++    pub fn new(req_buffsize: u32) -> Self {
++        Self {
++            mem: MemberType::Request,
++            req: PtmSBSReq {
++                buffersize: req_buffsize,
++            },
++            resp: PtmSBSResp {
++                bufsize: 0,
++                minsize: 0,
++                maxsize: 0,
++            },
++            result_code: 0,
++        }
++    }
++    pub fn get_bufsize(&self) -> u32 {
++        self.resp.bufsize
++    }
++}
++
++impl Ptm for PtmSetBufferSize {
++    fn ptm_to_request(&self) -> Vec<u8> {
++        let mut buf: Vec<u8> = Vec::<u8>::new();
++        buf.extend_from_slice(&self.req.buffersize.to_be_bytes());
++        buf
++    }
++
++    fn get_member_type(&self) -> MemberType {
++        self.mem
++    }
++
++    fn update_ptm_with_response(&mut self, buf: &[u8]) -> Result<()> {
++        let expected_len = 16;
++        let len = buf.len();
++        if len != expected_len {
++            return Err(TpmLibError::ConvertToPtm(
++                String::from(format!("Response for CmdSetBufferSize cmd is of incorrect length. Got {len} expected {expected_len}."))
++            ));
++        }
++        self.set_member_type(MemberType::Response);
++        self.set_result_code(u32::from_be_bytes(buf[0..4].try_into().unwrap()));
++
++        let bufsize = &buf[4..8];
++        self.resp.bufsize = u32::from_be_bytes(bufsize.try_into().unwrap());
++
++        let minsize = &buf[8..12];
++        self.resp.minsize = u32::from_be_bytes(minsize.try_into().unwrap());
++
++        let maxsize = &buf[12..16];
++        self.resp.maxsize = u32::from_be_bytes(maxsize.try_into().unwrap());
++
++        Ok(())
++    }
++
++    fn set_member_type(&mut self, mem: MemberType) {
++        self.mem = mem
++    }
++
++    fn set_result_code(&mut self, res: u32) {
++        self.result_code = res
++    }
++
++    fn get_result_code(&self) -> u32 {
++        self.result_code
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn test_ptmresult() -> Result<()> {
++        let buf: &[u8] = &[0, 0, 0, 1];
++        let mut result_code: PtmResult = 0;
++        result_code.update_ptm_with_response(buf)?;
++        assert_eq!(result_code.get_result_code(), 0x1);
++        Ok(())
++    }
++    #[test]
++    fn test_ptmcap() -> Result<()> {
++        let mut cap: PtmCap = 0x0;
++        let buf: &[u8] = &[0, 0, 0, 0xE, 0, 0, 0xFF, 0xFF];
++        cap.update_ptm_with_response(buf)?;
++        assert_eq!(cap.get_result_code(), 0xE);
++        Ok(())
++    }
++    #[test]
++    fn test_ptmest() -> Result<()> {
++        let mut est: PtmEst = PtmEst::new();
++        let buf: &[u8] = &[0, 0, 0xE, 0, 0xC, 0, 1, 1];
++        est.update_ptm_with_response(buf)?;
++        assert_eq!(est.get_result_code(), 0xE00);
++        assert_eq!(est.resp.bit, 0xC);
++        Ok(())
++    }
++    #[test]
++    /*PtmInit Testing */
++    fn test_ptminit() -> Result<()> {
++        let mut init: PtmInit = PtmInit::new();
++        init.init_flags = 0x1;
++        let buf = init.ptm_to_request();
++        assert_eq!(buf, [0x0, 0x0, 0x0, 0x1]);
++        let response_buf: &[u8] = &[0, 0, 0xE, 0];
++        init.update_ptm_with_response(response_buf)?;
++        assert_eq!(init.get_result_code(), 0xE00);
++        Ok(())
++    }
++    #[test]
++    /* PtmSetBufferSize Testing */
++    fn test_ptmsetbuffersize() -> Result<()> {
++        let mut psbs: PtmSetBufferSize = PtmSetBufferSize::new(1024);
++        // Member type should be Request after initialization
++        assert_eq!(psbs.get_member_type(), MemberType::Request);
++        let buf: &[u8] = &[
++            0, 0x12, 0x34, 0x56, 0, 0, 0, 0xA, 0, 0, 0, 0xB, 0, 0, 0, 0xC,
++        ];
++        psbs.update_ptm_with_response(buf)?;
++        assert_eq!(psbs.get_member_type(), MemberType::Response);
++        assert_eq!(psbs.get_result_code(), 0x123456);
++        assert_eq!(psbs.resp.bufsize, 0xA);
++        assert_eq!(psbs.resp.minsize, 0xB);
++        assert_eq!(psbs.resp.maxsize, 0xC);
++        Ok(())
++    }
++}
+diff --git a/src/tpm/src/socket.rs b/src/tpm/src/socket.rs
+new file mode 100644
+index 000000000..05e8b2b04
+--- /dev/null
++++ b/src/tpm/src/socket.rs
+@@ -0,0 +1,128 @@
++use std::io::Read;
++use std::os::unix::io::{AsRawFd, RawFd};
++use std::os::unix::net::UnixStream;
++use vmm_sys_util::sock_ctrl_msg::ScmSocket;
++use std::fmt::{Display, Formatter};
++
++#[derive(Debug)]
++pub enum TpmSocketError { 
++    ConnectToSocket(String),
++    ReadFromSocket(String),
++    WriteToSocket(String),
++}
++impl Display for TpmSocketError {
++    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
++        use self::TpmSocketError::*;
++        match self {
++            ConnectToSocket(err) => write!(f, "Cannot connect to tpm Socket: {:?}", err),
++            ReadFromSocket(err) => write!(f, "Failed to read from socket: {:?}", err),
++            WriteToSocket(err) => write!(f, "Failed to write to socket: {:?}", err),
++        }
++    }
++}
++
++type Result<T> = std::result::Result<T, TpmSocketError>;
++
++#[derive(PartialEq)]
++enum SocketDevState {
++    Disconnected,
++    Connecting,
++    Connected,
++}
++
++pub struct SocketDev {
++    state: SocketDevState,
++    stream: Option<UnixStream>,
++    // Fd sent to swtpm process for Data Channel
++    write_msgfd: RawFd,
++    // Data Channel used by Firecracker
++    data_fd: RawFd,
++    // Control Channel used by Firecracker
++    control_fd: RawFd,
++}
++
++impl Default for SocketDev {
++    fn default() -> Self {
++        Self::new()
++    }
++}
++
++impl SocketDev {
++    pub fn new() -> Self {
++        Self {
++            state: SocketDevState::Disconnected,
++            stream: None,
++            write_msgfd: -1,
++            control_fd: -1,
++            data_fd: -1,
++        }
++    }
++
++    pub fn init(&mut self, path: String) -> Result<()> {
++        self.connect(&path)?;
++        Ok(())
++    }
++
++    pub fn connect(&mut self, socket_path: &str) -> Result<()> {
++        self.state = SocketDevState::Connecting;
++
++        let s = UnixStream::connect(socket_path).map_err(|e| TpmSocketError::ConnectToSocket(
++            format!("{} {:?} ","Failed to connect to tpm Socket. Error:", e)))?;
++        self.control_fd = s.as_raw_fd();
++        self.stream = Some(s);
++        self.state = SocketDevState::Connected;
++        debug!("Connected to tpm socket path : {:?}", socket_path);
++        Ok(())
++    }
++
++    pub fn set_datafd(&mut self, fd: RawFd) {
++        self.data_fd = fd;
++    }
++
++    pub fn set_msgfd(&mut self, fd: RawFd) {
++        self.write_msgfd = fd;
++    }
++
++    pub fn send_full(&self, buf: &[u8]) -> Result<usize> {
++        let write_fd = self.write_msgfd;
++
++        let size = self
++            .stream
++            .as_ref()
++            .unwrap()
++            .send_with_fd(buf, write_fd)
++            .map_err(|e| TpmSocketError::WriteToSocket(
++                format!("{} {:?} ","Failed to write to Socket. Error:", e)))?;
++
++        Ok(size)
++    }
++
++    pub fn write(&mut self, buf: &[u8]) -> Result<usize> {
++        if self.stream.is_none() {
++            return Err(TpmSocketError::WriteToSocket(String::from("TPM Socket was not in Connected State")));
++        }
++
++        if matches!(self.state, SocketDevState::Connected) {
++            let ret = self.send_full(buf)?;
++            // swtpm will receive data Fd after a successful send
++            // Reset cached write_msgfd after a successful send
++            // Ideally, write_msgfd is reset after first Ctrl Command
++            if ret > 0 && self.write_msgfd != 0 {
++                self.write_msgfd = 0;
++            }
++            Ok(ret)
++        } else {
++            Err(TpmSocketError::WriteToSocket(String::from("TPM Socket was not in Connected State")))
++        }
++    }
++
++    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
++        if self.stream.is_none() {
++            return Err(TpmSocketError::ReadFromSocket(String::from("Stream for tpm socket was not initialized")));
++        }
++        let mut socket = self.stream.as_ref().unwrap();
++        let size: usize = socket.read(buf).map_err(|e| TpmSocketError::ReadFromSocket(
++            format!("{} {:?} ","Failed to read from socket. Error Code", e)))?;
++        Ok(size)
++    }
++}
+diff --git a/src/vmm/Cargo.toml b/src/vmm/Cargo.toml
+index 5244f5290..4b659cb7d 100644
+--- a/src/vmm/Cargo.toml
++++ b/src/vmm/Cargo.toml
+@@ -32,6 +32,7 @@ snapshot = { path = "../snapshot"}
+ utils = { path = "../utils" }
+ virtio_gen = { path = "../virtio_gen" }
+ vm-memory = { path = "../vm-memory" }
++tpm = { path = "../tpm" }
+ 
+ [target.'cfg(target_arch = "x86_64")'.dependencies]
+ cpuid = { path = "../cpuid" }
+diff --git a/src/vmm/src/builder.rs b/src/vmm/src/builder.rs
+index ea0e9862d..5753ffda8 100644
+--- a/src/vmm/src/builder.rs
++++ b/src/vmm/src/builder.rs
+@@ -18,6 +18,7 @@ use devices::legacy::{
+     EventFdTrigger, ReadableFd, SerialDevice, SerialEventsWrapper, SerialWrapper,
+ };
+ use devices::virtio::{Balloon, Block, MmioTransport, Net, VirtioDevice, Vsock, VsockUnixBackend};
++use devices::virtio::tpm::Tpm;
+ use event_manager::{MutEventSubscriber, SubscriberOps};
+ use libc::EFD_NONBLOCK;
+ use linux_loader::cmdline::Cmdline as LoaderKernelCmdline;
+@@ -376,6 +377,9 @@ pub fn build_microvm_for_boot(
+     if let Some(unix_vsock) = vm_resources.vsock.get() {
+         attach_unixsock_vsock_device(&mut vmm, &mut boot_cmdline, unix_vsock, event_manager)?;
+     }
++    if let Some(tpm) = vm_resources.tpm.get() {
++        attach_tpm_device(&mut vmm, &mut boot_cmdline, tpm, event_manager)?;
++    }
+ 
+     #[cfg(target_arch = "aarch64")]
+     attach_legacy_devices_aarch64(event_manager, &mut vmm, &mut boot_cmdline).map_err(Internal)?;
+@@ -1000,6 +1004,15 @@ fn attach_balloon_device(
+     attach_virtio_device(event_manager, vmm, id, balloon.clone(), cmdline)
+ }
+ 
++fn attach_tpm_device(
++    vmm: &mut Vmm,
++    cmdline: &mut LoaderKernelCmdline,
++    tpm: &Arc<Mutex<Tpm>>,
++    event_manager: &mut EventManager
++) -> std::result::Result<(), StartMicrovmError> {
++    let id = String::from(tpm.lock().expect("Poisoned lock").id());
++    attach_virtio_device(event_manager, vmm, id, tpm.clone(), cmdline)
++}
+ // Adds `O_NONBLOCK` to the stdout flags.
+ pub(crate) fn set_stdout_nonblocking() {
+     // SAFETY: Call is safe since parameters are valid.
+diff --git a/src/vmm/src/device_manager/mmio.rs b/src/vmm/src/device_manager/mmio.rs
+index 8a4b38ed9..a2d6500c6 100644
+--- a/src/vmm/src/device_manager/mmio.rs
++++ b/src/vmm/src/device_manager/mmio.rs
+@@ -19,8 +19,8 @@ use devices::legacy::RTCDevice;
+ use devices::legacy::SerialDevice;
+ use devices::pseudo::BootTimer;
+ use devices::virtio::{
+-    Balloon, Block, MmioTransport, Net, VirtioDevice, TYPE_BALLOON, TYPE_BLOCK, TYPE_NET,
+-    TYPE_VSOCK,
++    Balloon, Block, MmioTransport, Net, VirtioDevice, Tpm, TYPE_BALLOON, TYPE_BLOCK, TYPE_NET,
++    TYPE_VSOCK, TYPE_TPM,
+ };
+ use devices::BusDevice;
+ use kvm_ioctls::{IoEventAddress, VmFd};
+@@ -448,6 +448,14 @@ impl MMIODeviceManager {
+                     // Any in-flight packets or events are simply lost.
+                     // Vsock is restored 'empty'.
+                 }
++                TYPE_TPM => {
++                    let tpm = virtio.as_mut_any().downcast_mut::<Tpm>().unwrap();
++
++                    if tpm.is_activated() {
++                        info!("kick tpm {}.", id);
++                        tpm.process_virtio_queues();
++                    }
++                }
+                 _ => (),
+             }
+             Ok(())
+diff --git a/src/vmm/src/resources.rs b/src/vmm/src/resources.rs
+index 974a73ab1..d08344ef2 100644
+--- a/src/vmm/src/resources.rs
++++ b/src/vmm/src/resources.rs
+@@ -23,6 +23,7 @@ use crate::vmm_config::metrics::{init_metrics, MetricsConfig, MetricsConfigError
+ use crate::vmm_config::mmds::{MmdsConfig, MmdsConfigError};
+ use crate::vmm_config::net::*;
+ use crate::vmm_config::vsock::*;
++use crate::vmm_config::tpm::*;
+ use crate::vstate::vcpu::VcpuConfig;
+ 
+ type Result<E> = std::result::Result<(), E>;
+@@ -52,6 +53,8 @@ pub enum Error {
+     VmConfig(VmConfigError),
+     /// Vsock device configuration error.
+     VsockDevice(VsockConfigError),
++    /// TPM device configuration error.
++    TpmDevice(TpmConfigError)
+ }
+ 
+ impl std::fmt::Display for Error {
+@@ -68,6 +71,7 @@ impl std::fmt::Display for Error {
+             Error::NetDevice(err) => write!(f, "Network device error: {}", err),
+             Error::VmConfig(err) => write!(f, "VM config error: {}", err),
+             Error::VsockDevice(err) => write!(f, "Vsock device error: {}", err),
++            Error::TpmDevice(err) => write!(f, "Tpm device error: {}", err)
+         }
+     }
+ }
+@@ -93,6 +97,8 @@ pub struct VmmConfig {
+     net_devices: Vec<NetworkInterfaceConfig>,
+     #[serde(rename = "vsock")]
+     vsock_device: Option<VsockDeviceConfig>,
++    #[serde(rename = "tpm")]
++    tpm_device: Option<TpmDeviceConfig>,
+ }
+ 
+ /// A data structure that encapsulates the device configurations
+@@ -119,6 +125,8 @@ pub struct VmResources {
+     pub mmds_size_limit: usize,
+     /// Whether or not to load boot timer device.
+     pub boot_timer: bool,
++    /// The tpm device
++    pub tpm: TpmBuilder,
+ }
+ 
+ impl VmResources {
+@@ -178,6 +186,10 @@ impl VmResources {
+             resources.set_mmds_config(mmds_config, &instance_info.id)?;
+         }
+ 
++        if let Some(tpm_config) = vmm_config.tpm_device {
++            resources.set_tpm_device(tpm_config)?;
++        }
++
+         Ok(resources)
+     }
+ 
+@@ -404,6 +416,15 @@ impl VmResources {
+         self.vsock.insert(config)
+     }
+ 
++    /// Sets a tpm device to be attached when the VM starts.
++    pub fn set_tpm_device(&mut self, config: TpmDeviceConfig) -> Result<TpmConfigError> {
++        // Validating parsing tpm as path
++        if !std::path::Path::new(&config.socket).exists() {
++            return Err(TpmConfigError::ParseTpmPathMissing)
++        }
++        self.tpm.set(config)
++    }
++
+     /// Setter for mmds config.
+     pub fn set_mmds_config(
+         &mut self,
+@@ -488,6 +509,7 @@ impl From<&VmResources> for VmmConfig {
+             mmds_config: resources.mmds_config(),
+             net_devices: resources.net_builder.configs(),
+             vsock_device: resources.vsock.config(),
++            tpm_device: None
+         }
+     }
+ }
+@@ -578,6 +600,10 @@ mod tests {
+         }
+     }
+ 
++    fn default_tpm() -> TpmBuilder {
++        TpmBuilder::default()
++    }
++
+     fn default_vm_resources() -> VmResources {
+         VmResources {
+             vm_config: VmConfig::default(),
+@@ -589,6 +615,7 @@ mod tests {
+             mmds: None,
+             boot_timer: false,
+             mmds_size_limit: HTTP_MAX_PAYLOAD_SIZE,
++            tpm: default_tpm(),
+         }
+     }
+ 
+@@ -1567,17 +1594,5 @@ mod tests {
+             format!("{}", Error::VmConfig(VmConfigError::InvalidMemorySize)),
+             format!("VM config error: {}", VmConfigError::InvalidMemorySize)
+         );
+-        assert_eq!(
+-            format!(
+-                "{}",
+-                Error::VsockDevice(VsockConfigError::CreateVsockDevice(
+-                    VsockError::BufDescTooSmall
+-                ))
+-            ),
+-            format!(
+-                "Vsock device error: {}",
+-                VsockConfigError::CreateVsockDevice(VsockError::BufDescTooSmall)
+-            )
+-        );
+     }
+ }
+diff --git a/src/vmm/src/rpc_interface.rs b/src/vmm/src/rpc_interface.rs
+index 5eb460ba6..04ff47443 100644
+--- a/src/vmm/src/rpc_interface.rs
++++ b/src/vmm/src/rpc_interface.rs
+@@ -42,6 +42,7 @@ use crate::vmm_config::net::{
+ use crate::vmm_config::snapshot::{CreateSnapshotParams, LoadSnapshotParams, SnapshotType};
+ use crate::vmm_config::vsock::{VsockConfigError, VsockDeviceConfig};
+ use crate::vmm_config::{self, RateLimiterUpdate};
++use crate::vmm_config::tpm::{TpmDeviceConfig, TpmConfigError};
+ use crate::{EventManager, FcExitCode};
+ 
+ /// This enum represents the public interface of the VMM. Each action contains various
+@@ -105,6 +106,8 @@ pub enum VmmAction {
+     /// `VsockDeviceConfig` as input. This action can only be called before the microVM has
+     /// booted.
+     SetVsockDevice(VsockDeviceConfig),
++    /// Set TPM device or update the one that already exists. Can only be called before the microVM has started.
++    SetTpmDevice(TpmDeviceConfig),
+     /// Launch the microVM. This action can only be called before the microVM has booted.
+     StartMicroVm,
+     /// Send CTRL+ALT+DEL to the microVM, using the i8042 keyboard function. If an AT-keyboard
+@@ -168,6 +171,8 @@ pub enum VmmActionError {
+     StartMicrovm(StartMicrovmError),
+     /// The action `SetVsockDevice` failed because of bad user input.
+     VsockConfig(VsockConfigError),
++    /// The action `SetTpmDevice` failed because of bad user input.
++    TpmConfig(TpmConfigError)
+ }
+ 
+ impl Display for VmmActionError {
+@@ -203,6 +208,7 @@ impl Display for VmmActionError {
+                 StartMicrovm(err) => err.to_string(),
+                 // The action `SetVsockDevice` failed because of bad user input.
+                 VsockConfig(err) => err.to_string(),
++                TpmConfig(err) => err.to_string()
+             }
+         )
+     }
+@@ -430,6 +436,7 @@ impl<'a> PrebootApiController<'a> {
+             PutMMDS(value) => self.put_mmds(value),
+             SetBalloonDevice(config) => self.set_balloon_device(config),
+             SetVsockDevice(config) => self.set_vsock_device(config),
++            SetTpmDevice(config) => self.set_tpm_device(config),
+             SetMmdsConfiguration(config) => self.set_mmds_config(config),
+             StartMicroVm => self.start_microvm(),
+             UpdateVmConfiguration(config) => self.update_vm_config(config),
+@@ -512,6 +519,13 @@ impl<'a> PrebootApiController<'a> {
+             .map_err(VmmActionError::VsockConfig)
+     }
+ 
++    fn set_tpm_device(&mut self, cfg: TpmDeviceConfig) -> ActionResult {
++        self.vm_resources
++            .set_tpm_device(cfg)
++            .map(|()| VmmData::Empty)
++            .map_err(VmmActionError::TpmConfig)
++    }
++
+     // On success, this command will end the pre-boot stage and this controller
+     // will be replaced by a runtime controller.
+     fn start_microvm(&mut self) -> ActionResult {
+@@ -669,6 +683,7 @@ impl RuntimeApiController {
+             | SetBalloonDevice(_)
+             | SetVsockDevice(_)
+             | SetMmdsConfiguration(_)
++            | SetTpmDevice(_)
+             | StartMicroVm
+             | UpdateVmConfiguration(_) => Err(VmmActionError::OperationNotSupportedPostBoot),
+         }
+@@ -835,6 +850,7 @@ mod tests {
+     use seccompiler::BpfThreadMap;
+ 
+     use super::*;
++    use crate::vmm_config::tpm::TpmConfigError;
+     use crate::vmm_config::balloon::BalloonBuilder;
+     use crate::vmm_config::drive::{CacheType, FileEngineType};
+     use crate::vmm_config::logger::LoggerLevel;
+@@ -881,6 +897,7 @@ mod tests {
+         boot_cfg_set: bool,
+         block_set: bool,
+         vsock_set: bool,
++        tpm_set: bool,
+         net_set: bool,
+         pub mmds: Option<Arc<Mutex<Mmds>>>,
+         pub mmds_size_limit: usize,
+@@ -985,6 +1002,14 @@ mod tests {
+             Ok(())
+         }
+ 
++        pub fn set_tpm_device(&mut self, _: TpmDeviceConfig) -> Result<(), TpmConfigError> {
++            if self.force_errors {
++                return Err(TpmConfigError::CreateTpmEmulator);
++            }
++            self.tpm_set = true;
++            Ok(())
++        }
++
+         pub fn set_mmds_config(
+             &mut self,
+             mmds_config: MmdsConfig,
+diff --git a/src/vmm/src/vmm_config/mod.rs b/src/vmm/src/vmm_config/mod.rs
+index bf5c08274..70bbdabf7 100644
+--- a/src/vmm/src/vmm_config/mod.rs
++++ b/src/vmm/src/vmm_config/mod.rs
+@@ -33,6 +33,8 @@ pub mod net;
+ pub mod snapshot;
+ /// Wrapper for configuring the vsock devices attached to the microVM.
+ pub mod vsock;
++/// Wrapper for configuring the TPM
++pub mod tpm;
+ 
+ // TODO: Migrate the VMM public-facing code (i.e. interface) to use stateless structures,
+ // for receiving data/args, such as the below `RateLimiterConfig` and `TokenBucketConfig`.
+diff --git a/src/vmm/src/vmm_config/tpm.rs b/src/vmm/src/vmm_config/tpm.rs
+new file mode 100644
+index 000000000..3829426b7
+--- /dev/null
++++ b/src/vmm/src/vmm_config/tpm.rs
+@@ -0,0 +1,69 @@
++use std::fmt;
++use std::sync::{Arc, Mutex};
++use serde::{Deserialize, Serialize};
++use devices::virtio::tpm::{Tpm, TpmError};
++use tpm::emulator::{Emulator, TpmEmulatorError};
++
++type MutexTpm = Arc<Mutex<Tpm>>;
++
++/// Errors associated with TPM config errors
++#[derive(Debug, derive_more::From)]
++pub enum TpmConfigError {
++    /// General TPM config error, TODO change 
++    CreateTpmVirtioDevice(TpmError),
++    /// Cannot create tpm device
++    CreateTpmEmulator(TpmEmulatorError), // TODO AAA kolla vsock.rs VsockError
++    /// Missing path for TPM device
++    ParseTpmPathMissing,
++}
++
++impl fmt::Display for TpmConfigError {
++    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
++        match self {
++            TpmConfigError::CreateTpmVirtioDevice(err) => write!(f, "Failed to create TPM virtio device: {:?}", err),
++            TpmConfigError::CreateTpmEmulator(err) => write!(f, "Failed to create TPM Emulator: {:?}", err),
++            TpmConfigError::ParseTpmPathMissing => write!(f, "Error parsing --tpm: path missing"),
++        }
++    }
++}
++
++type Result<T> = std::result::Result<T, TpmConfigError>;
++
++/// Used for describing the TPM Configuration
++#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
++#[serde(deny_unknown_fields)]
++pub struct TpmDeviceConfig {
++    /// Path to the socket to be used
++    pub socket: String
++}
++
++/// A builder of Tpm with Unix backend from 'TpmDeviceConfig'.
++#[derive(Default)]
++pub struct TpmBuilder {
++    inner: Option<MutexTpm>,
++}
++
++impl TpmBuilder {
++    
++    /// Inserts a Tpm device in the store.
++    pub fn set(&mut self, config: TpmDeviceConfig) -> Result<()> {
++        let emulator = match Emulator::new(config.socket) {
++            Ok(emu) => emu,
++            Err(err) => {
++                return Err(TpmConfigError::CreateTpmEmulator(err))
++            }
++        };
++        match Tpm::new(Box::new(emulator)) {
++            Ok(tpm) => {
++                self.inner = Some(Arc::new(Mutex::new(tpm)));
++                Ok(())
++            },
++            Err(err) => Err(TpmConfigError::CreateTpmVirtioDevice(err))
++        }
++    }
++    
++    /// Get the inner TPM device
++    pub fn get(&self) -> Option<&MutexTpm> {
++        self.inner.as_ref()
++    }
++}
+-- 
+2.38.1
+

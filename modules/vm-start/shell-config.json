@@ -1,0 +1,25 @@
+{
+    "boot-source": {
+      "kernel_image_path": "./vm-image/out/fc-image-kernel",
+      "boot_args": "console=ttyS0 panic=-1",
+      "initrd_path": "./vm-image/out/fc-image-initrd.img"
+    },
+    "drives": [],
+    "machine-config": {
+      "vcpu_count": 1,
+      "mem_size_mib": 256,
+      "smt": false,
+      "track_dirty_pages": false
+    },
+    "balloon": null,
+    "network-interfaces": [
+      
+    ],
+    "vsock": null,
+    "logger": null,
+    "metrics": null,
+    "mmds-config": null,
+    "tpm": {
+      "socket": "./.tmp/tpm/socket"
+    }
+  }
