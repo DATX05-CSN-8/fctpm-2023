@@ -27,7 +27,7 @@ func NewResourcePool[T any](size int, allocator resourceAllocator[T]) (*resource
 		if err != nil {
 			return nil, err
 		}
-		t.readyq = append(t.readyq, inst)
+		t.readyq[i] = inst
 	}
 	return &t, nil
 }

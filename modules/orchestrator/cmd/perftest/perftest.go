@@ -13,8 +13,8 @@ import (
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmexecution"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vminfo"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/internal/vmstarter"
+	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/resourcepool"
 	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpminstantiator"
-	"github.com/DATX05-CSN-8/fctpm-2023/modules/orchestrator/pkg/tpmpool"
 )
 
 func genDefaultFCBinPath() string {
@@ -118,12 +118,28 @@ func main() {
 			fmt.Println("Could not create temp tpm directory")
 			panic(err)
 		}
-		tpmsinst, err := tpmpool.NewTpmPoolService(tpmPath, *totalVms)
+		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
+		pool, err := resourcepool.NewResourcePool[tpminstantiator.TpmInstance](*totalVms, tpminst)
 		if err != nil {
 			fmt.Println("Could not create temp tpm pool")
 			panic(err)
 		}
-		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, tpmsinst)
+		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, pool)
+	} else if *rtype == "pool-alt" {
+		runnerCfg := perftest.NewTestRunnerConfig(&baseTemplateData, templateName, *tempPath, *resultPath)
+		tpmPath := dirutil.JoinPath(*tempPath, "tpm")
+		err = dirutil.EnsureDirectory(tpmPath)
+		if err != nil {
+			fmt.Println("Could not create temp tpm directory")
+			panic(err)
+		}
+		tpminst := tpminstantiator.NewTpmInstantiatorServiceWithBasePath(tpmPath)
+		pool, err := resourcepool.NewAltResourcePool[tpminstantiator.TpmInstance](*totalVms, tpminst)
+		if err != nil {
+			fmt.Println("Could not create temp tpm pool")
+			panic(err)
+		}
+		runner = perftest.NewTpmRunner(runnerCfg, vmstarterService, dataRetrieverService, pool)
 	} else {
 		panic("Invalid performance test type: '" + *rtype + "'.")
 	}
