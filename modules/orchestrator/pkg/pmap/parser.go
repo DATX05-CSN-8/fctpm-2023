@@ -74,5 +74,5 @@ func (r *ParsedRow) Kbytes() int {
 }
 
 func (r *ParsedRow) Writeable() bool {
-	return (r.mode & 1 << MODE_WRITE) > 0
+	return (r.mode & (1 << MODE_WRITE)) > 0
 }
