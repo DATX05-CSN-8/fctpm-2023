@@ -71,7 +71,7 @@ func main() {
 	p.Add(grid)
 	p.X.Tick.Marker = MyTicker{width: 10, labelwidth: 100, labelfmt: "%.f"}
 	p.Y.Tick.Marker = MyTicker{width: 0.05, labelwidth: 0.2, labelfmt: "%.1f"}
-	p.X.Min = min - float64(extraSize)
+	p.X.Min = 0
 	p.X.Max = max + float64(extraSize)
 	p.Y.Min = 0
 	p.Y.Max = 1.1
