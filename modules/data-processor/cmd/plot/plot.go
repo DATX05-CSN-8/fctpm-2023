@@ -76,7 +76,7 @@ func main() {
 	p.Y.Min = 0
 	p.Y.Max = 1.1
 
-	err := p.Save(4*vg.Inch, 4*vg.Inch, "out."+*outputtype)
+	err := p.Save(6*vg.Inch, 4*vg.Inch, "out."+*outputtype)
 	if err != nil {
 		panic(err)
 	}

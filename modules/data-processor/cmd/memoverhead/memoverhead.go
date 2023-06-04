@@ -50,7 +50,7 @@ func main() {
 	// p.Y.Tick.Marker = MyTicker{width: 0.05, labelwidth: 0.2, labelfmt: "%.1f"}
 	p.X.Min = min - float64(extraSize)
 	p.X.Max = max + float64(extraSize)
-	p.Y.Min = 2
+	p.Y.Min = 0
 	p.Y.Max = 4
 
 	err = p.Save(4*vg.Inch, 4*vg.Inch, "out."+*outputtype)
